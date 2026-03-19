@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self' https://api.anthropic.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://liklmjlayhwpgjlzibtq.supabase.co wss://liklmjlayhwpgjlzibtq.supabase.co;">
 <title>CG Parking — Budget Control</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <style>
@@ -43,8 +43,10 @@ body {
 }
 
 /* ═══════════════════════════════════════════════════════════ SCREENS */
-.screen { display: none; }
-.screen.active { display: block; }
+.screen { display: none !important; }
+.screen.active { display: block !important; }
+.screen.active.app-layout { display: flex !important; }
+.screen.active.exec-flex { display: flex !important; }
 
 /* ═══════════════════════════════════════════════════════════ LANDING */
 #landingScreen {
@@ -653,7 +655,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 </div>
 
 <!-- ═══════════════════════════════════════════════════ ADMIN APP -->
-<div id="adminApp" class="screen app-layout" style="display:none">
+<div id="adminApp" class="screen app-layout">
   <aside class="sidebar">
     <div class="sidebar-header">
       <img src="assets/COCG_photo.jpg" class="sidebar-logo-img" alt="CG" onerror="this.style.display='none'">
@@ -1014,7 +1016,11 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
             <button class="btn btn-primary" onclick="Admin.saveThresholds()">Save Thresholds</button>
           </div>
           <div class="card">
-            <div class="card-title">PO Code Reference</div>
+            <div class="card-title">👥 Supervisor Management</div>
+            <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Add, edit or remove supervisors. You set their PIN — share it with them directly.</p>
+            <button class="btn btn-green btn-sm" onclick="Admin.openAddSupervisor()" style="margin-bottom:14px">+ Add Supervisor</button>
+            <div id="supervisorListAdmin"></div>
+          </div>
             <table style="font-size:12px">
               <thead><tr><th>Code</th><th>Type</th><th>Limit</th></tr></thead>
               <tbody>
@@ -1034,7 +1040,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 </div><!-- /adminApp -->
 
 <!-- ═══════════════════════════════════════════════════ SUPERVISOR APP -->
-<div id="supervisorApp" class="screen app-layout" style="display:none">
+<div id="supervisorApp" class="screen app-layout">
   <aside class="sidebar">
     <div class="sidebar-header">
       <div id="supDivPhoto" style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#333">
@@ -1197,7 +1203,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 </div><!-- /supervisorApp -->
 
 <!-- ═══════════════════════════════════════════════════ EXECUTIVE APP -->
-<div id="executiveApp" class="screen" style="display:none;flex-direction:column;height:100vh">
+<div id="executiveApp" class="screen exec-flex" style="flex-direction:column;height:100vh">
   <div class="exec-header">
     <img src="assets/COCG_photo.jpg" alt="CG" onerror="this.style.display='none'">
     <div>
@@ -1419,25 +1425,174 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
   </div>
 </div>
 
+<!-- ADD / EDIT SUPERVISOR MODAL -->
+<div id="supMgmtModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <span class="modal-title" id="supMgmtTitle">Add Supervisor</span>
+      <button class="modal-close" onclick="App.closeModal('supMgmtModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="supMgmtEditId">
+      <div class="form-group"><label>Full Name *</label><input type="text" id="supMgmtName" class="form-input" placeholder="First Last"></div>
+      <div class="form-group">
+        <label>Division *</label>
+        <select id="supMgmtDiv" class="form-input">
+          <option value="">Select division…</option>
+          <option value="8000">8000 — Admin</option>
+          <option value="8001">8001 — Enforcement</option>
+          <option value="8002">8002 — Sustainability</option>
+          <option value="8100">8100 — Garages Admin</option>
+          <option value="8101">8101 — Garage 1</option>
+          <option value="8102">8102 — Garage 2</option>
+          <option value="8103">8103 — Garage 3</option>
+          <option value="8104">8104 — Garage 4</option>
+          <option value="8105">8105 — Garage 6</option>
+          <option value="8200">8200 — On Street</option>
+          <option value="8300">8300 — Lots</option>
+          <option value="8800">8800 — Trolley</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>PIN *</label><input type="text" id="supMgmtPin" class="form-input" placeholder="4+ digits" maxlength="8"></div>
+        <div class="form-group"><label>Confirm PIN *</label><input type="text" id="supMgmtPin2" class="form-input" maxlength="8"></div>
+      </div>
+      <div id="supMgmtErr" class="error-msg" style="display:none"></div>
+      <div class="info-box" style="margin-top:8px;font-size:12px">💡 Share the PIN directly with the supervisor. They can use it to log in immediately.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('supMgmtModal')">Cancel</button>
+      <button class="btn btn-green" onclick="Admin.saveSupervisor()">Save Supervisor</button>
+    </div>
+  </div>
+</div>
+
+<!-- FORCE CHANGE PASSWORD MODAL (first login) -->
+<div id="forceChangePassModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <span class="modal-title">🔒 Set Your Admin Password</span>
+    </div>
+    <div class="modal-body">
+      <div class="warning-box" style="margin-bottom:16px">First login detected. You must set a new password before continuing.</div>
+      <div class="form-group"><label>New Password *</label><input type="password" id="forceNewPass" class="form-input" placeholder="Min 6 characters"></div>
+      <div class="form-group"><label>Confirm Password *</label><input type="password" id="forceConfirmPass" class="form-input"></div>
+      <div id="forcePassErr" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary w-full" onclick="App.submitForceChangePass()">Set Password & Continue</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast" style="display:none"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
-// DATA STORE — localStorage-backed
+// SUPABASE CLIENT
 // ═══════════════════════════════════════════════════════════════════════
-const DB = {
-  get: k => { try { return JSON.parse(localStorage.getItem('cgp_'+k)) || null; } catch { return null; } },
-  set: (k,v) => localStorage.setItem('cgp_'+k, JSON.stringify(v)),
-  push: (k,v) => { const arr = DB.get(k)||[]; arr.push(v); DB.set(k,arr); return arr; },
+const SUPA_URL = 'https://liklmjlayhwpgjlzibtq.supabase.co';
+const SUPA_KEY = 'sb_publishable_eDaWxkbSS3bQJY3t1uz9Eg_zYl69MH0';
+const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+
+// ═══════════════════════════════════════════════════════════════════════
+// SUPABASE DB LAYER — all tables use jsonb `data` column
+// ═══════════════════════════════════════════════════════════════════════
+const SDB = {
+  // Cache for real-time data
+  _cache: {},
+
+  // Fetch all rows from a table, returns array of data objects (with id)
+  async getAll(table) {
+    const { data, error } = await supa.from(table).select('id,data,created_at').order('created_at', {ascending:true});
+    if (error) { console.error('SDB.getAll', table, error); return []; }
+    const rows = (data||[]).map(r => ({ ...r.data, _id: r.id }));
+    SDB._cache[table] = rows;
+    return rows;
+  },
+
+  // Get single setting value by key from settings table
+  async getSetting(key) {
+    const { data } = await supa.from('settings').select('id,data').eq('data->>key', key).single();
+    return data ? data.data.value : null;
+  },
+
+  // Upsert a setting
+  async setSetting(key, value) {
+    const { data: existing } = await supa.from('settings').select('id').eq('data->>key', key).single();
+    if (existing) {
+      await supa.from('settings').update({ data: { key, value } }).eq('id', existing.id);
+    } else {
+      await supa.from('settings').insert({ data: { key, value } });
+    }
+  },
+
+  // Insert a row
+  async insert(table, obj) {
+    const { data, error } = await supa.from(table).insert({ data: obj }).select('id').single();
+    if (error) { console.error('SDB.insert', table, error); return null; }
+    return data?.id;
+  },
+
+  // Update a row by Supabase id
+  async update(table, supaId, obj) {
+    const { error } = await supa.from(table).update({ data: obj }).eq('id', supaId);
+    if (error) { console.error('SDB.update', table, error); return false; }
+    return true;
+  },
+
+  // Delete a row by Supabase id
+  async delete(table, supaId) {
+    const { error } = await supa.from(table).delete().eq('id', supaId);
+    if (error) { console.error('SDB.delete', table, error); return false; }
+    return true;
+  },
+
+  // Replace ALL rows in a table (for bulk seed)
+  async replaceAll(table, rows) {
+    await supa.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (!rows.length) return;
+    const inserts = rows.map(r => ({ data: r }));
+    const { error } = await supa.from(table).insert(inserts);
+    if (error) console.error('SDB.replaceAll', table, error);
+  },
+
+  // Subscribe to real-time changes on a table
+  subscribe(table, callback) {
+    supa.channel(`rt-${table}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table }, callback)
+      .subscribe();
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// SEED DATA — FY26 Budget from Excel files
+// LOCAL FALLBACK for session only (never persisted data)
+// ═══════════════════════════════════════════════════════════════════════
+const Local = {
+  get: k => { try { return JSON.parse(sessionStorage.getItem('cgp_'+k)); } catch { return null; } },
+  set: (k,v) => sessionStorage.setItem('cgp_'+k, JSON.stringify(v)),
+  clear: k => sessionStorage.removeItem('cgp_'+k),
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// IN-MEMORY STATE (loaded from Supabase on login)
+// ═══════════════════════════════════════════════════════════════════════
+let STATE = {
+  budget: [],
+  pos: [],
+  invoices: [],
+  contracts: [],
+  pendingOrders: [],
+  changeRequests: [],
+  supervisors: [],
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// SEED DATA — FY26 Budget
 // ═══════════════════════════════════════════════════════════════════════
 const BUDGET_SEED = [
-  // From 545.xlsx + 8001 + 8002 + 8800 (summed by div+account)
-  // 545 file
   {div:'8000',acct:'3118',desc:'Prof Serv - Misc/Other',amt:25000},
   {div:'8101',acct:'3118',desc:'Prof Serv - Misc/Other',amt:226253},
   {div:'8102',acct:'3118',desc:'Prof Serv - Misc/Other',amt:225731},
@@ -1445,13 +1600,13 @@ const BUDGET_SEED = [
   {div:'8104',acct:'3118',desc:'Prof Serv - Misc/Other',amt:195971},
   {div:'8105',acct:'3118',desc:'Prof Serv - Misc/Other',amt:210645},
   {div:'8000',acct:'3150',desc:"Interdept'L Alloc - Admin",amt:565000},
-  {div:'8101',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:135881}, // 96950+38931
-  {div:'8102',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:283808}, // 202496+81312
-  {div:'8103',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:92996}, // 66353+26643
-  {div:'8104',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:165755}, // 118266+47489
-  {div:'8105',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:216831}, // 154708+62123
-  {div:'8200',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:1866195}, // 1331521+534674
-  {div:'8300',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:836968}, // 597174+239794
+  {div:'8101',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:135881},
+  {div:'8102',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:283808},
+  {div:'8103',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:92996},
+  {div:'8104',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:165755},
+  {div:'8105',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:216831},
+  {div:'8200',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:1866195},
+  {div:'8300',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:836968},
   {div:'8200',acct:'3401',desc:"Custodial - Enh'd Street Clng",amt:550000},
   {div:'8000',acct:'4010',desc:'Automobile Allowance',amt:10395},
   {div:'8200',acct:'4100',desc:'Telecom Services',amt:160000},
@@ -1461,26 +1616,26 @@ const BUDGET_SEED = [
   {div:'8000',acct:'4500',desc:'General Liability Insurance',amt:31507},
   {div:'8100',acct:'4500',desc:'General Liability Insurance',amt:8577},
   {div:'8200',acct:'4500',desc:'General Liability Insurance',amt:17482},
-  {div:'8100',acct:'4600',desc:'Repair/Maint - Buildings',amt:350941}, // 235156+90000+24785
-  {div:'8102',acct:'4600',desc:'Repair/Maint - Buildings',amt:13172}, // 12000+1172
+  {div:'8100',acct:'4600',desc:'Repair/Maint - Buildings',amt:350941},
+  {div:'8102',acct:'4600',desc:'Repair/Maint - Buildings',amt:13172},
   {div:'8103',acct:'4600',desc:'Repair/Maint - Buildings',amt:12000},
-  {div:'8105',acct:'4600',desc:'Repair/Maint - Buildings',amt:13172}, // 12000+1172
-  {div:'8300',acct:'4600',desc:'Repair/Maint - Buildings',amt:78707}, // 73750+4957
+  {div:'8105',acct:'4600',desc:'Repair/Maint - Buildings',amt:13172},
+  {div:'8300',acct:'4600',desc:'Repair/Maint - Buildings',amt:78707},
   {div:'8000',acct:'4610',desc:'Repair/Maint - Office Equip',amt:5600},
   {div:'8101',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:17523},
   {div:'8102',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:32288},
   {div:'8103',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:24000},
   {div:'8104',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:19590},
-  {div:'8105',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:29111}, // 29112-1
+  {div:'8105',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:29111},
   {div:'8200',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:1625},
-  {div:'1608',acct:'4612',desc:'Repair/Maint - Comm Garages',amt:700000}, // 350000*2
+  {div:'1608',acct:'4612',desc:'Repair/Maint - Comm Garages',amt:700000},
   {div:'8101',acct:'4700',desc:'Special Printed Forms',amt:250},
   {div:'8102',acct:'4700',desc:'Special Printed Forms',amt:250},
   {div:'8104',acct:'4700',desc:'Special Printed Forms',amt:500},
   {div:'8105',acct:'4700',desc:'Special Printed Forms',amt:500},
   {div:'8000',acct:'4701',desc:'Printing & Binding',amt:7000},
   {div:'8000',acct:'4900',desc:'Misc Exp - Other',amt:53111},
-  {div:'8200',acct:'4900',desc:'Misc Exp - Other',amt:105105}, // 100000+5105
+  {div:'8200',acct:'4900',desc:'Misc Exp - Other',amt:105105},
   {div:'8000',acct:'4911',desc:'Misc Exp - Credit Card Charges',amt:1000000},
   {div:'8000',acct:'5100',desc:'Supplies - Office',amt:7000},
   {div:'8102',acct:'5100',desc:'Supplies - Office',amt:350},
@@ -1505,33 +1660,30 @@ const BUDGET_SEED = [
   {div:'8102',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:1500},
   {div:'8103',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:1000},
   {div:'8104',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:1000},
-  {div:'8105',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:1001}, // 1000+1
+  {div:'8105',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:1001},
   {div:'8200',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:11500},
   {div:'8300',acct:'5231',desc:'Equipment (Oper) - Minor/Tools',amt:6598},
   {div:'8200',acct:'5242',desc:'Parts - Misc Equip',amt:12000},
-  {div:'8000',acct:'5400',desc:'Membership Dues/Subscriptions',amt:1650}, // 1535+115
-  {div:'8000',acct:'5500',desc:'Employee Training',amt:7385}, // 7500-115
-  // 8001 file
+  {div:'8000',acct:'5400',desc:'Membership Dues/Subscriptions',amt:1650},
+  {div:'8000',acct:'5500',desc:'Employee Training',amt:7385},
   {div:'8001',acct:'4500',desc:'General Liability Insurance',amt:64698},
   {div:'8001',acct:'4700',desc:'Special Printed Forms',amt:20000},
   {div:'8001',acct:'5100',desc:'Supplies - Office',amt:1600},
   {div:'8001',acct:'5220',desc:'Uniform - Allowance',amt:8500},
   {div:'8001',acct:'5500',desc:'Employee Training',amt:2000},
-  // 8002 file
   {div:'8002',acct:'4010',desc:'Automobile Allowance',amt:3898},
   {div:'8002',acct:'4303',desc:"Solid Waste/Wastewater Disp'L",amt:70000},
   {div:'8002',acct:'4900',desc:'Misc Exp - Other',amt:1500},
   {div:'8002',acct:'5400',desc:'Membership Dues/Subscriptions',amt:24722},
   {div:'8002',acct:'5500',desc:'Employee Training',amt:6000},
-  // 8800 file (summed per account)
-  {div:'8800',acct:'3112',desc:'Prof Serv - Last Mile Transit',amt:287300}, // 520785-287300+287300-233485+21700-21700 = 287300
+  {div:'8800',acct:'3112',desc:'Prof Serv - Last Mile Transit',amt:287300},
   {div:'8800',acct:'3118',desc:'Prof Serv - Misc/Other',amt:100000},
   {div:'8800',acct:'3124',desc:'Prof Serv - Security',amt:5631},
-  {div:'8800',acct:'3126',desc:'Prof Serv - Trolley Operations',amt:2037737}, // 1841737+196000
+  {div:'8800',acct:'3126',desc:'Prof Serv - Trolley Operations',amt:2037737},
   {div:'8800',acct:'4010',desc:'Automobile Allowance',amt:3898},
   {div:'8800',acct:'4401',desc:'Rental - Copiers',amt:3000},
   {div:'8800',acct:'4701',desc:'Printing & Binding',amt:2000},
-  {div:'8800',acct:'4900',desc:'Misc Exp - Other',amt:23222}, // 1000+22222
+  {div:'8800',acct:'4900',desc:'Misc Exp - Other',amt:23222},
   {div:'8800',acct:'5100',desc:'Supplies - Office',amt:2000},
   {div:'8800',acct:'5221',desc:'Uniform - Protective (PPE)',amt:600},
   {div:'8800',acct:'5222',desc:'Uniform - Purchase/Rental',amt:3000},
@@ -1539,7 +1691,6 @@ const BUDGET_SEED = [
   {div:'8800',acct:'5500',desc:'Employee Training',amt:3000},
 ];
 
-// FY26 PO Seed data from PO_FY26_Status.xlsx
 const PO_SEED = [
   {poNum:'15864',date:'2026-03-16',vendor:'Block By Block',start:290135,balance:290135,code:'CNT2',type:'Contract Variable',fiscal:'FY26',div:'8200',acct:'3401',multiAcct:null,notes:'',tricky:false},
   {poNum:'15854',date:'2026-03-16',vendor:'Vulcan Inc.',start:1592.5,balance:1592.5,code:'SPO1',type:'Quote Specific',fiscal:'FY26',div:'8300',acct:'4600',multiAcct:null,notes:'',tricky:false},
@@ -1556,7 +1707,7 @@ const PO_SEED = [
   {poNum:'15407',date:'2025-11-12',vendor:'Pest Wildlife Pro, LLC',start:7032,balance:4102,code:'SPO1',type:'Quote Specific',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
   {poNum:'15400',date:'2025-11-12',vendor:'ODP Business Solutions, LLC',start:6050,balance:5386.72,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
   {poNum:'15370',date:'2025-11-07',vendor:'Electronic Recycling Center, Inc',start:1300,balance:699.9,code:'CNT2',type:'Contract Variable',fiscal:'FY26',div:'8002',acct:'4303',multiAcct:null,notes:'Event Dependent',tricky:false},
-  {poNum:'15270',date:'2025-10-28',vendor:"Home Depot U.S.A., Inc.",start:10223,balance:5730.16,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
+  {poNum:'15270',date:'2025-10-28',vendor:'Home Depot U.S.A., Inc.',start:10223,balance:5730.16,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
   {poNum:'15248',date:'2025-10-27',vendor:'Amazon Capital Services, Inc.',start:7523.14,balance:6529.87,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
   {poNum:'15213',date:'2025-10-24',vendor:'Blinkay USA llc',start:20000,balance:15800,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:'8001',acct:'4700',multiAcct:null,notes:'As needed',tricky:false},
   {poNum:'15210',date:'2025-10-24',vendor:'Flowbird America Inc',start:160000,balance:107992,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:'8200',acct:'4100',multiAcct:null,notes:'Monthly',tricky:false},
@@ -1571,61 +1722,30 @@ const PO_SEED = [
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
-// DIVISION CONFIG
+// DIVISION & EXEC CONFIG
 // ═══════════════════════════════════════════════════════════════════════
 const DIV_CONFIG = {
-  '8000': { name:'Admin', photo:'assets/COCG_photo.jpg', label:'8000 Admin' },
-  '8001': { name:'Enforcement', photo:'assets/Enforcement_photo.jpeg', label:'8001 Enforcement' },
-  '8002': { name:'Sustainability', photo:'assets/Sustainability_Photo_KCGB.png', label:'8002 Sustainability' },
-  '8100': { name:'Garages Admin', photo:'assets/Garages_Photo.jpg', label:'8100 Garages Admin' },
-  '8101': { name:'Garage 1', photo:'assets/Garages_Photo.jpg', label:'8101 Garage 1' },
-  '8102': { name:'Garage 2', photo:'assets/Garages_Photo.jpg', label:'8102 Garage 2' },
-  '8103': { name:'Garage 3', photo:'assets/Garages_Photo.jpg', label:'8103 Garage 3' },
-  '8104': { name:'Garage 4', photo:'assets/Garages_Photo.jpg', label:'8104 Garage 4' },
-  '8105': { name:'Garage 6', photo:'assets/Garages_Photo.jpg', label:'8105 Garage 6' },
-  '8200': { name:'On Street', photo:'assets/on_street_photo.webp', label:'8200 On Street' },
-  '8300': { name:'Lots', photo:'assets/Lots_Photo.jpg', label:'8300 Lots' },
-  '8800': { name:'Trolley', photo:'assets/Trolley_Photo.jpg', label:'8800 Trolley' },
+  '8000':{ name:'Admin', photo:'assets/COCG_photo.jpg', label:'8000 Admin' },
+  '8001':{ name:'Enforcement', photo:'assets/Enforcement_photo.jpeg', label:'8001 Enforcement' },
+  '8002':{ name:'Sustainability', photo:'assets/Sustainability_Photo_KCGB.png', label:'8002 Sustainability' },
+  '8100':{ name:'Garages Admin', photo:'assets/Garages_Photo.jpg', label:'8100 Garages Admin' },
+  '8101':{ name:'Garage 1', photo:'assets/Garages_Photo.jpg', label:'8101 Garage 1' },
+  '8102':{ name:'Garage 2', photo:'assets/Garages_Photo.jpg', label:'8102 Garage 2' },
+  '8103':{ name:'Garage 3', photo:'assets/Garages_Photo.jpg', label:'8103 Garage 3' },
+  '8104':{ name:'Garage 4', photo:'assets/Garages_Photo.jpg', label:'8104 Garage 4' },
+  '8105':{ name:'Garage 6', photo:'assets/Garages_Photo.jpg', label:'8105 Garage 6' },
+  '8200':{ name:'On Street', photo:'assets/on_street_photo.webp', label:'8200 On Street' },
+  '8300':{ name:'Lots', photo:'assets/Lots_Photo.jpg', label:'8300 Lots' },
+  '8800':{ name:'Trolley', photo:'assets/Trolley_Photo.jpg', label:'8800 Trolley' },
 };
 
-// Executive config
 const EXEC_CONFIG = [
-  {
-    id: 'overview',
-    name: 'Overview',
-    photo: 'assets/COCG_photo.jpg',
-    divs: Object.keys(DIV_CONFIG).sort(),
-    showBudget: false,
-    notes: {}
-  },
-  {
-    id: 'beltran',
-    name: 'Monica Beltran',
-    photo: 'assets/M_Beltran_photo.jpg',
-    divs: ['8001','8000','8002','8100','8101','8102','8103','8104','8105','8200','8300','8800'],
-    showBudget: true,
-    notes: {}
-  },
-  {
-    id: 'kowalchik',
-    name: 'John Kowalchik',
-    photo: 'assets/John_K_photo.jpeg',
-    divs: ['8100','8101','8102','8103','8104','8105','8200','8300'],
-    showBudget: true,
-    notes: {}
-  },
-  {
-    id: 'anderson',
-    name: 'Matthew Anderson',
-    photo: 'assets/Matt_Anderson_photo.webp',
-    divs: ['8002','8800'],
-    showBudget: true,
-    showDetailBudget: true,
-    notes: {
-      '8002-4303': 'ℹ️ This is not really solid waste — $12,000 is our operating account.',
-      '8002-4900': 'ℹ️ This is our actual solid waste grant account, but only shows the operating budget, not our accumulated savings.',
-    },
-    blockByBlock: { div:'8200', acct:'3401', label:'8200 - 3401 Block by Block' }
+  { id:'overview', name:'Overview', photo:'assets/COCG_photo.jpg', divs:Object.keys(DIV_CONFIG).sort(), showBudget:false, notes:{} },
+  { id:'beltran', name:'Monica Beltran', photo:'assets/M_Beltran_photo.jpg', divs:['8001','8000','8002','8100','8101','8102','8103','8104','8105','8200','8300','8800'], showBudget:true, notes:{} },
+  { id:'kowalchik', name:'John Kowalchik', photo:'assets/John_K_photo.jpeg', divs:['8100','8101','8102','8103','8104','8105','8200','8300'], showBudget:true, notes:{} },
+  { id:'anderson', name:'Matthew Anderson', photo:'assets/Matt_Anderson_photo.webp', divs:['8002','8800'], showBudget:true, showDetailBudget:true,
+    notes:{ '8002-4303':'ℹ️ This is not really solid waste — $12,000 is our operating account.', '8002-4900':'ℹ️ This is our actual solid waste grant account, but only shows the operating budget, not our accumulated savings.' },
+    blockByBlock:{ div:'8200', acct:'3401', label:'8200 - 3401 Block by Block' }
   },
 ];
 
@@ -1633,8 +1753,8 @@ const EXEC_CONFIG = [
 // HELPERS
 // ═══════════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
-const fmt = n => '$' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtK = n => n >= 1000000 ? '$'+(n/1000000).toFixed(2)+'M' : n >= 1000 ? '$'+(n/1000).toFixed(1)+'K' : fmt(n);
+const fmt = n => '$'+(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtK = n => n>=1000000?'$'+(n/1000000).toFixed(2)+'M':n>=1000?'$'+(n/1000).toFixed(1)+'K':fmt(n);
 const today = () => new Date().toISOString().split('T')[0];
 const daysUntil = d => { if(!d) return 999; return Math.ceil((new Date(d)-new Date())/86400000); };
 
@@ -1642,89 +1762,55 @@ let _toastTimer;
 function showToast(msg, type='') {
   clearTimeout(_toastTimer);
   const t = $('toast');
-  t.textContent = msg; t.className = type; t.style.display = 'block';
-  _toastTimer = setTimeout(() => t.style.display='none', 3500);
+  t.textContent=msg; t.className=type; t.style.display='block';
+  _toastTimer = setTimeout(()=>t.style.display='none', 3500);
 }
 
-function budgetBar(used, total) {
-  if (!total) return '';
-  const pct = Math.min(100, (used/total)*100);
-  const cls = pct > 90 ? 'crit' : pct > 65 ? 'warn' : 'good';
+function showLoading(msg='Loading…') {
+  let el = $('globalLoader');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'globalLoader';
+    el.style.cssText='position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;z-index:9998;font-size:15px;font-weight:600;color:var(--text2)';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+function hideLoading() { const el=$('globalLoader'); if(el) el.style.display='none'; }
+
+function budgetBar(used,total) {
+  if(!total) return '';
+  const pct=Math.min(100,(used/total)*100);
+  const cls=pct>90?'crit':pct>65?'warn':'good';
   return `<div class="budget-bar-wrap"><div class="budget-bar ${cls}" style="width:${pct}%"></div></div>`;
 }
 
 function tagHTML(code) {
-  const map = {
-    'CNT1':'tag-blue','CNT2':'tag-purple','PGB2':'tag-purple',
-    'PBK2':'tag-orange','PBK1':'tag-orange',
-    'SPO1':'tag-green','SPO2':'tag-yellow','SLS1':'tag-green'
-  };
-  return `<span class="tag ${map[code]||'tag-gray'}">${code}</span>`;
+  const map={'CNT1':'tag-blue','CNT2':'tag-purple','PGB2':'tag-purple','PBK2':'tag-orange','PBK1':'tag-orange','SPO1':'tag-green','SPO2':'tag-yellow','SLS1':'tag-green'};
+  return `<span class="tag ${map[code]||'tag-gray'}">${code||'—'}</span>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// INIT — seed data if first load
+// BUDGET CALCS (operate on STATE)
 // ═══════════════════════════════════════════════════════════════════════
-function initSeedData() {
-  if (!DB.get('seeded_v4')) {
-    DB.set('budget', BUDGET_SEED);
-    DB.set('pos', PO_SEED);
-    DB.set('invoices', []);
-    DB.set('contracts', []);
-    DB.set('scopes', []);
-    DB.set('pendingOrders', []);
-    DB.set('changeRequests', []);
-    DB.set('supervisors', []);
-    DB.set('seeded_v4', true);
-  }
-}
+function getBudget() { return STATE.budget; }
+function getBudgetForDiv(div) { return STATE.budget.filter(b=>b.div===div); }
 
-// ═══════════════════════════════════════════════════════════════════════
-// BUDGET CALCULATIONS
-// ═══════════════════════════════════════════════════════════════════════
-function getBudget() { return DB.get('budget') || []; }
-
-function getBudgetForDiv(div) {
-  return getBudget().filter(b => b.div === div);
-}
-
-function getPOsForDiv(div) {
-  const pos = DB.get('pos') || [];
-  return pos.filter(p => {
-    if (p.fiscal === 'FY25') return false;
-    if (p.div === div) return true;
-    if (p.multiAcct && p.multiAcct.toLowerCase().includes(div)) return true;
-    return false;
-  });
-}
-
-// Get PO spend (starting - balance)
-function getPOSpend(po) { return (po.start||0) - (po.balance||0); }
-
-// Total budget for a division
 function divBudgetTotal(div) {
-  return getBudgetForDiv(div).reduce((s,b) => s+b.amt, 0);
+  return getBudgetForDiv(div).reduce((s,b)=>s+b.amt,0);
 }
-
-// Total PO commitment for a division (POs that hit budget)
 function divPOCommitment(div) {
-  const pos = DB.get('pos') || [];
-  let total = 0;
-  for (const p of pos) {
-    if (p.fiscal === 'FY25') continue;
-    if (p.div === div) total += p.start;
-    else if (p.multiAcct) {
-      // Try to extract division share from multiAcct string
-      const regex = new RegExp(div+'[^0-9]*(\\d+)', 'i');
-      const m = p.multiAcct.match(regex);
-      if (m) total += parseFloat(m[1]);
+  let total=0;
+  for(const p of STATE.pos) {
+    if(p.fiscal==='FY25') continue;
+    if(p.div===div) total+=p.start;
+    else if(p.multiAcct) {
+      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+)','i'));
+      if(m) total+=parseFloat(m[1]);
     }
   }
   return total;
-}
-
-function divRemainingBudget(div) {
-  return divBudgetTotal(div) - divPOCommitment(div);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1733,121 +1819,194 @@ function divRemainingBudget(div) {
 const App = {
   currentUser: null,
   pendingInvId: null,
+  _pendingAdminLogin: false,
 
-  init() {
-    initSeedData();
-    // Check saved session
-    const sess = DB.get('session');
+  async init() {
+    showLoading('Connecting…');
+    // Load all state from Supabase
+    await App.loadAllState();
+    hideLoading();
+
+    // Check session
+    const sess = Local.get('session');
     if (sess && sess.role) {
-      this.currentUser = sess;
-      this.enter(sess.role);
+      App.currentUser = sess;
+      App.enter(sess.role);
     }
   },
 
-  showAdminLogin() { $('adminLoginModal').style.display='flex'; $('adminPassInput').focus(); },
+  async loadAllState() {
+    const [budget, pos, invoices, contracts, pendingOrders, changeRequests, supervisors] = await Promise.all([
+      SDB.getAll('budget_accounts'),
+      SDB.getAll('purchase_orders'),
+      SDB.getAll('invoices'),
+      SDB.getAll('contracts'),
+      SDB.getAll('pending_orders'),
+      SDB.getAll('change_requests'),
+      SDB.getAll('settings').then(rows => rows.filter(r=>r.key==='supervisors').map(r=>r.value).flat()),
+    ]);
 
-  submitAdminLogin() {
-    const pw = DB.get('adminPass') || '134522';
-    if ($('adminPassInput').value === pw) {
-      App.closeModal('adminLoginModal');
-      this.currentUser = {role:'admin'};
-      DB.set('session', this.currentUser);
-      this.enter('admin');
+    // Seed budget/POs if empty
+    if (budget.length === 0) {
+      showLoading('Setting up FY26 budget…');
+      await SDB.replaceAll('budget_accounts', BUDGET_SEED);
+      STATE.budget = BUDGET_SEED;
     } else {
-      $('loginError').style.display='block';
+      STATE.budget = budget;
     }
+    if (pos.length === 0) {
+      showLoading('Loading POs…');
+      await SDB.replaceAll('purchase_orders', PO_SEED);
+      STATE.pos = PO_SEED;
+    } else {
+      STATE.pos = pos;
+    }
+
+    STATE.invoices = invoices;
+    STATE.contracts = contracts;
+    STATE.pendingOrders = pendingOrders;
+    STATE.changeRequests = changeRequests;
+
+    // Supervisors stored as a single settings row
+    const supRow = (await SDB.getAll('settings')).find(r=>r.key==='supervisors');
+    STATE.supervisors = supRow ? supRow.value : [];
   },
 
-  showSupLogin() { $('supLoginModal').style.display='flex'; App.showSupSignIn(); },
-  showSupSignIn() { $('supSignInPanel').style.display='block'; $('supRegPanel').style.display='none'; },
+  // Real-time subscriptions
+  subscribeAll() {
+    SDB.subscribe('purchase_orders', async () => { STATE.pos = await SDB.getAll('purchase_orders'); Admin.renderPOTable?.(); Admin.renderDashboard?.(); });
+    SDB.subscribe('invoices', async () => { STATE.invoices = await SDB.getAll('invoices'); Admin.renderInvoiceList?.(); Admin.renderDashboard?.(); Supervisor.renderInvoiceApproval?.(); });
+    SDB.subscribe('contracts', async () => { STATE.contracts = await SDB.getAll('contracts'); Admin.renderContracts?.(); });
+    SDB.subscribe('pending_orders', async () => { STATE.pendingOrders = await SDB.getAll('pending_orders'); Admin.renderPendingOrders?.(); Admin.updateBadges?.(); });
+    SDB.subscribe('change_requests', async () => { STATE.changeRequests = await SDB.getAll('change_requests'); Admin.renderChangeRequests?.(); Admin.updateBadges?.(); Supervisor.renderDashboard?.(); });
+  },
+
+  showAdminLogin() {
+    $('adminLoginModal').style.display='flex';
+    $('adminPassInput').value='';
+    $('loginError').style.display='none';
+    setTimeout(()=>$('adminPassInput').focus(), 100);
+  },
+
+  async submitAdminLogin() {
+    const entered = $('adminPassInput').value;
+    const storedPass = await SDB.getSetting('adminPass');
+    const isFirstLogin = !storedPass; // no password set yet = first login
+    const correctPass = storedPass || 'admin'; // default is 'admin'
+
+    if (entered !== correctPass) {
+      $('loginError').style.display='block';
+      return;
+    }
+    App.closeModal('adminLoginModal');
+
+    if (isFirstLogin) {
+      // Force password change on first login
+      $('forceChangePassModal').style.display='flex';
+      setTimeout(()=>$('forceNewPass').focus(),100);
+      App._pendingAdminLogin = true;
+      return;
+    }
+    App._doAdminLogin();
+  },
+
+  async submitForceChangePass() {
+    const np = $('forceNewPass').value;
+    const cp = $('forceConfirmPass').value;
+    if (!np || np.length < 4) { $('forcePassErr').textContent='Password must be at least 4 characters.'; $('forcePassErr').style.display='block'; return; }
+    if (np !== cp) { $('forcePassErr').textContent='Passwords do not match.'; $('forcePassErr').style.display='block'; return; }
+    showLoading('Saving password…');
+    await SDB.setSetting('adminPass', np);
+    hideLoading();
+    App.closeModal('forceChangePassModal');
+    App._pendingAdminLogin = false;
+    App._doAdminLogin();
+  },
+
+  _doAdminLogin() {
+    App.currentUser = { role:'admin' };
+    Local.set('session', App.currentUser);
+    App.enter('admin');
+    App.subscribeAll();
+  },
+
+  showSupLogin() {
+    $('supLoginModal').style.display='flex';
+    App.showSupSignIn();
+  },
+  showSupSignIn() { $('supSignInPanel').style.display='block'; $('supRegPanel').style.display='none'; $('supLoginErr').style.display='none'; },
   showSupRegister() { $('supSignInPanel').style.display='none'; $('supRegPanel').style.display='block'; },
 
-  submitSupLogin() {
+  async submitSupLogin() {
     const name = $('supNameInput').value.trim();
-    const pin = $('supPinInput').value.trim();
-    const sups = DB.get('supervisors') || [];
-    const sup = sups.find(s => s.name.toLowerCase()===name.toLowerCase() && s.pin===pin);
+    const pin  = $('supPinInput').value.trim();
+    const sup  = STATE.supervisors.find(s=>s.name.toLowerCase()===name.toLowerCase() && s.pin===pin);
     if (sup) {
       App.closeModal('supLoginModal');
-      this.currentUser = {role:'supervisor', name:sup.name, div:sup.div, pin:sup.pin};
-      DB.set('session', this.currentUser);
-      this.enter('supervisor');
+      App.currentUser = { role:'supervisor', name:sup.name, div:sup.div, pin:sup.pin };
+      Local.set('session', App.currentUser);
+      App.enter('supervisor');
+      App.subscribeAll();
     } else {
       $('supLoginErr').style.display='block';
     }
   },
 
-  submitSupRegister() {
-    const name = $('supRegName').value.trim();
-    const div = $('supRegDiv').value;
-    const pin = $('supRegPin').value.trim();
-    const pin2 = $('supRegPin2').value.trim();
-    if (!name||!div||!pin) { $('supRegErr').textContent='All fields required.'; $('supRegErr').style.display='block'; return; }
-    if (pin !== pin2) { $('supRegErr').textContent='PINs do not match.'; $('supRegErr').style.display='block'; return; }
-    if (pin.length < 4) { $('supRegErr').textContent='PIN must be 4 digits.'; $('supRegErr').style.display='block'; return; }
-    const sups = DB.get('supervisors') || [];
-    if (sups.find(s=>s.name.toLowerCase()===name.toLowerCase())) { $('supRegErr').textContent='Name already registered.'; $('supRegErr').style.display='block'; return; }
-    sups.push({name, div, pin});
-    DB.set('supervisors', sups);
-    App.closeModal('supLoginModal');
-    this.currentUser = {role:'supervisor', name, div, pin};
-    DB.set('session', this.currentUser);
-    this.enter('supervisor');
-  },
+  // Supervisors are managed by admin — no self-registration
+  submitSupRegister() { showToast('Registration is handled by the administrator.','error'); },
 
   loginAs(role) {
-    this.currentUser = {role};
-    DB.set('session', this.currentUser);
-    this.enter(role);
+    App.currentUser = { role };
+    Local.set('session', App.currentUser);
+    App.enter(role);
+    App.subscribeAll();
   },
 
   enter(role) {
-    $('landingScreen').classList.remove('active');
-    if (role==='admin') { $('adminApp').style.display='flex'; Admin.init(); }
-    else if (role==='supervisor') { $('supervisorApp').style.display='flex'; Supervisor.init(); }
-    else if (role==='executive') { $('executiveApp').style.display='flex'; Executive.init(); }
+    // Hide all screens
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    if (role==='admin') { $('adminApp').classList.add('active'); Admin.init(); }
+    else if (role==='supervisor') { $('supervisorApp').classList.add('active'); Supervisor.init(); }
+    else if (role==='executive') { $('executiveApp').classList.add('active'); Executive.init(); }
   },
 
   logout() {
-    DB.set('session', null);
-    this.currentUser = null;
-    $('adminApp').style.display='none';
-    $('supervisorApp').style.display='none';
-    $('executiveApp').style.display='none';
+    Local.clear('session');
+    App.currentUser = null;
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
     $('landingScreen').classList.add('active');
-    // reset inputs
     $('adminPassInput').value='';
     $('loginError').style.display='none';
   },
 
   closeModal(id) { $(id).style.display='none'; },
-
   toggleLang() { showToast('Language toggle — coming soon'); },
-
   forceCloseSession() { App.closeModal('sessionConflictModal'); Admin.init(); },
 
   showApproveInv(invId, detail) {
-    this.pendingInvId = invId;
+    App.pendingInvId = invId;
     $('approveInvDetail').innerHTML = detail;
-    $('approvePin').value = '';
+    $('approvePin').value='';
     $('approvePinErr').style.display='none';
     $('approveInvModal').style.display='flex';
   },
 
-  confirmInvApproval() {
+  async confirmInvApproval() {
     const user = App.currentUser;
-    if (!user) return;
-    const pin = $('approvePin').value.trim();
-    const sups = DB.get('supervisors') || [];
-    const sup = sups.find(s => s.name===user.name && s.pin===pin);
+    const pin  = $('approvePin').value.trim();
+    const sup  = STATE.supervisors.find(s=>s.name===user.name && s.pin===pin);
     if (!sup && user.role!=='admin') { $('approvePinErr').style.display='block'; return; }
-    const invs = DB.get('invoices') || [];
-    const inv = invs.find(i=>i.id===App.pendingInvId);
-    if (inv) { inv.approved=true; inv.approvedBy=user.name||'Admin'; inv.approvedDate=today(); }
-    DB.set('invoices', invs);
+    const inv = STATE.invoices.find(i=>i._id===App.pendingInvId);
+    if (!inv) return;
+    inv.approved=true; inv.approvedBy=user.name||'Admin'; inv.approvedDate=today();
+    showLoading('Saving…');
+    await SDB.update('invoices', inv._id, inv);
+    STATE.invoices = await SDB.getAll('invoices');
+    hideLoading();
     App.closeModal('approveInvModal');
-    showToast('Invoice approved ✓', 'success');
+    showToast('Invoice approved ✓','success');
     Supervisor.renderInvoiceApproval();
+    Admin.renderInvoiceList();
   },
 };
 
@@ -1855,239 +2014,253 @@ const App = {
 // ADMIN MODULE
 // ═══════════════════════════════════════════════════════════════════════
 const Admin = {
-  _poFile: null,
-  _invFile: null,
-  _budgetImportData: null,
-  _poImportData: null,
   _poAccountLineCount: 0,
-  _editPOId: null,
+  _editPOSupaId: null,
 
-  init() {
+  async init() {
     Admin.renderDashboard();
-    Admin.populatePOSelect();
     Admin.renderPOTable();
     Admin.renderInvoiceList();
     Admin.renderContracts();
     Admin.renderBudgetOverview();
+    Admin.renderSupervisorList();
+    Admin.populatePOSelect();
     Admin.updateBadges();
   },
 
   showPage(page) {
     document.querySelectorAll('#adminApp .page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('#adminApp .nav-item').forEach(n=>n.classList.remove('active'));
-    $(`page-${page}`).classList.add('active');
+    $(`page-${page}`)?.classList.add('active');
     document.querySelector(`#adminApp .nav-item[data-page="${page}"]`)?.classList.add('active');
-    $('adminPageTitle').textContent = {
-      dashboard:'Dashboard', budgetOverview:'Budget Overview', budgetImport:'Import Budget',
-      poManagement:'PO Management', pendingOrders:'Pending Orders', changeRequests:'Change Requests',
-      invoiceEntry:'Invoice Entry', invoiceList:'All Invoices', contracts:'Contracts',
-      scopes:'Scopes of Work', alerts:'Alerts', exports:'Export Reports', settings:'Settings'
-    }[page] || page;
-    if (page==='budgetOverview') Admin.renderBudgetOverview();
-    if (page==='pendingOrders') Admin.renderPendingOrders();
-    if (page==='changeRequests') Admin.renderChangeRequests();
-    if (page==='alerts') Admin.renderAllAlerts();
-    if (page==='invoiceList') Admin.renderInvoiceList();
-    if (page==='contracts') Admin.renderContracts();
+    const titles={dashboard:'Dashboard',budgetOverview:'Budget Overview',budgetImport:'Import Budget',poManagement:'PO Management',pendingOrders:'Pending Orders',changeRequests:'Change Requests',invoiceEntry:'Invoice Entry',invoiceList:'All Invoices',contracts:'Contracts',scopes:'Scopes of Work',alerts:'Alerts',exports:'Export Reports',settings:'Settings'};
+    $('adminPageTitle').textContent=titles[page]||page;
+    if(page==='budgetOverview') Admin.renderBudgetOverview();
+    if(page==='pendingOrders') Admin.renderPendingOrders();
+    if(page==='changeRequests') Admin.renderChangeRequests();
+    if(page==='alerts') Admin.renderAllAlerts();
+    if(page==='invoiceList') Admin.renderInvoiceList();
+    if(page==='contracts') Admin.renderContracts();
+    if(page==='settings') Admin.renderSupervisorList();
   },
 
   filterChanged() { Admin.renderPOTable(); Admin.renderBudgetOverview(); },
 
   updateBadges() {
-    const pos = DB.get('pos')||[];
-    const pending = DB.get('pendingOrders')||[];
-    const crs = DB.get('changeRequests')||[];
-    const pendCount = pending.filter(p=>p.status==='pending').length;
-    const crCount = crs.filter(c=>c.status==='pending').length;
-    const alerts = Admin.getAlerts();
-    if (pendCount>0) { $('pendingBadge').textContent=pendCount; $('pendingBadge').style.display='inline'; }
-    if (crCount>0) { $('crBadge').textContent=crCount; $('crBadge').style.display='inline'; }
-    const alertCount = alerts.filter(a=>a.level==='critical').length;
-    if (alertCount>0) {
-      ['adminAlertBadge','adminAlertBadge2'].forEach(id=>{ $(id).textContent=alertCount; $(id).style.display='inline'; });
-    }
+    const pendCount = STATE.pendingOrders.filter(p=>p.status==='pending').length;
+    const crCount   = STATE.changeRequests.filter(c=>c.status==='pending').length;
+    const alerts    = Admin.getAlerts();
+    const alertCount= alerts.filter(a=>a.level==='critical').length;
+    if(pendCount>0){$('pendingBadge').textContent=pendCount;$('pendingBadge').style.display='inline';}else{$('pendingBadge').style.display='none';}
+    if(crCount>0){$('crBadge').textContent=crCount;$('crBadge').style.display='inline';}else{$('crBadge').style.display='none';}
+    if(alertCount>0){['adminAlertBadge','adminAlertBadge2'].forEach(id=>{$(id).textContent=alertCount;$(id).style.display='inline';});}
   },
 
   getAlerts() {
-    const alerts = [];
-    const contracts = DB.get('contracts')||[];
-    const pos = DB.get('pos')||[];
-    for (const c of contracts) {
-      const days = daysUntil(c.ctExpDate);
-      if (days < 0) alerts.push({level:'critical', icon:'🚨', title:`Contract Expired: ${c.ctVendor}`, sub:`${c.ctNumber} — expired ${Math.abs(days)} days ago`});
-      else if (days < 30) alerts.push({level:'critical', icon:'⚠️', title:`Contract Expiring: ${c.ctVendor}`, sub:`${c.ctNumber} — ${days} days left`});
-      else if (days < 60) alerts.push({level:'warning', icon:'📅', title:`Contract Expiring Soon: ${c.ctVendor}`, sub:`${c.ctNumber} — ${days} days left`});
+    const alerts=[];
+    for(const c of STATE.contracts){
+      const days=daysUntil(c.ctExpDate);
+      if(days<0) alerts.push({level:'critical',icon:'🚨',title:`Contract Expired: ${c.ctVendor}`,sub:`${c.ctNumber} — expired ${Math.abs(days)}d ago`});
+      else if(days<30) alerts.push({level:'critical',icon:'⚠️',title:`Expiring Soon: ${c.ctVendor}`,sub:`${c.ctNumber} — ${days}d left`});
+      else if(days<60) alerts.push({level:'warning',icon:'📅',title:`Expiring: ${c.ctVendor}`,sub:`${c.ctNumber} — ${days}d left`});
     }
-    for (const p of pos) {
-      if (p.fiscal==='FY25') alerts.push({level:'warning', icon:'📋', title:`FY25 PO: ${p.vendor}`, sub:`PO ${p.poNum} — cannot roll, use FY26`});
-      if (p.tricky) alerts.push({level:'info', icon:'🔗', title:`Needs Budget Link: ${p.vendor}`, sub:`PO ${p.poNum} — distribution unknown`});
-      if (p.balance && p.start && (p.balance/p.start) < 0.25 && p.fiscal!=='FY25') {
-        alerts.push({level:'warning', icon:'💸', title:`Low Balance: PO ${p.poNum}`, sub:`${p.vendor} — ${fmt(p.balance)} remaining (${Math.round(p.balance/p.start*100)}%)`});
-      }
+    for(const p of STATE.pos){
+      if(p.fiscal==='FY25') alerts.push({level:'warning',icon:'📋',title:`FY25 PO: ${p.vendor}`,sub:`PO ${p.poNum} — cannot roll`});
+      if(p.tricky) alerts.push({level:'info',icon:'🔗',title:`Needs Budget Link: ${p.vendor}`,sub:`PO ${p.poNum}`});
+      if(p.balance&&p.start&&(p.balance/p.start)<0.25&&p.fiscal!=='FY25') alerts.push({level:'warning',icon:'💸',title:`Low Balance: PO ${p.poNum}`,sub:`${p.vendor} — ${fmt(p.balance)} left`});
     }
     return alerts;
   },
 
   renderDashboard() {
-    const pos = DB.get('pos')||[];
-    const invoices = DB.get('invoices')||[];
-    const budget = getBudget();
-    const fy26pos = pos.filter(p=>p.fiscal!=='FY25');
-    const totalBudget = budget.reduce((s,b)=>s+b.amt,0);
-    const totalPO = fy26pos.reduce((s,p)=>s+p.start,0);
+    const fy26pos=STATE.pos.filter(p=>p.fiscal!=='FY25');
+    const totalBudget=STATE.budget.reduce((s,b)=>s+b.amt,0);
+    const totalPO=fy26pos.reduce((s,p)=>s+p.start,0);
+    $('adminStatsGrid').innerHTML=`
+      <div class="stat-card info"><div class="stat-label">FY26 Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">All divisions</div></div>
+      <div class="stat-card warning"><div class="stat-label">Active POs</div><div class="stat-value">${fy26pos.length}</div><div class="stat-sub">${STATE.pos.filter(p=>p.fiscal==='FY25').length} FY25 legacy</div></div>
+      <div class="stat-card success"><div class="stat-label">PO Commitment</div><div class="stat-value">${fmtK(totalPO)}</div></div>
+      <div class="stat-card danger"><div class="stat-label">Invoices</div><div class="stat-value">${STATE.invoices.length}</div><div class="stat-sub">${STATE.invoices.filter(i=>!i.approved).length} pending</div></div>
+      <div class="stat-card"><div class="stat-label">Tricky POs</div><div class="stat-value">${STATE.pos.filter(p=>p.tricky).length}</div><div class="stat-sub">Need budget link</div></div>
+      <div class="stat-card"><div class="stat-label">Contracts</div><div class="stat-value">${STATE.contracts.length}</div><div class="stat-sub">${STATE.contracts.filter(c=>daysUntil(c.ctExpDate)<30).length} expiring &lt;30d</div></div>`;
 
-    $('adminStatsGrid').innerHTML = `
-      <div class="stat-card info"><div class="stat-label">Total FY26 Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">Across all divisions</div></div>
-      <div class="stat-card warning"><div class="stat-label">Active POs</div><div class="stat-value">${fy26pos.length}</div><div class="stat-sub">${pos.filter(p=>p.fiscal==='FY25').length} FY25 legacy</div></div>
-      <div class="stat-card success"><div class="stat-label">PO Commitment</div><div class="stat-value">${fmtK(totalPO)}</div><div class="stat-sub">FY26 POs</div></div>
-      <div class="stat-card danger"><div class="stat-label">Invoices Entered</div><div class="stat-value">${invoices.length}</div><div class="stat-sub">${invoices.filter(i=>!i.approved).length} pending approval</div></div>
-      <div class="stat-card"><div class="stat-label">Tricky POs</div><div class="stat-value">${pos.filter(p=>p.tricky).length}</div><div class="stat-sub">Need budget link</div></div>
-      <div class="stat-card"><div class="stat-label">Contracts</div><div class="stat-value">${(DB.get('contracts')||[]).length}</div><div class="stat-sub">${(DB.get('contracts')||[]).filter(c=>daysUntil(c.ctExpDate)<30).length} expiring &lt;30d</div></div>
-    `;
-
-    const alerts = Admin.getAlerts();
-    const ap = $('adminAlertsPanel');
-    if (!alerts.length) { ap.innerHTML='<div class="simple-notice">No active alerts. All good! ✓</div>'; }
-    else ap.innerHTML = alerts.slice(0,6).map(a=>`
-      <div class="alert-item ${a.level}">
-        <div class="alert-icon">${a.icon}</div>
-        <div class="alert-text"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div>
-      </div>`).join('');
-
-    const recent = [...(DB.get('invoices')||[])].reverse().slice(0,5);
-    $('recentActivityPanel').innerHTML = recent.length ? `<div class="table-wrap"><table><thead><tr><th>Invoice</th><th>PO</th><th>Amount</th><th>Date</th></tr></thead><tbody>
-      ${recent.map(i=>`<tr><td>${i.invNumber}</td><td>${i.poNum||'—'}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate||'—'}</td></tr>`).join('')}
-    </tbody></table></div>` : '<div class="simple-notice">No invoices entered yet.</div>';
+    const alerts=Admin.getAlerts();
+    $('adminAlertsPanel').innerHTML=alerts.length?alerts.slice(0,6).map(a=>`<div class="alert-item ${a.level}"><div class="alert-icon">${a.icon}</div><div class="alert-text"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div></div>`).join(''):'<div class="simple-notice">No active alerts ✓</div>';
+    const recent=[...STATE.invoices].reverse().slice(0,5);
+    $('recentActivityPanel').innerHTML=recent.length?`<div class="table-wrap"><table><thead><tr><th>Invoice</th><th>PO</th><th>Amount</th><th>Date</th></tr></thead><tbody>${recent.map(i=>`<tr><td>${i.invNumber}</td><td>${i.poNum||'—'}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate||'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="simple-notice">No invoices yet.</div>';
   },
 
   renderBudgetOverview() {
-    const sortBy = $('budgetSortBy')?.value || 'division';
-    const divF = $('budgetDivFilter2')?.value || '';
-    const budget = getBudget().filter(b => !divF || b.div===divF);
-    const pos = DB.get('pos')||[];
-    const el = $('budgetOverviewContent');
-    if (!el) return;
-
-    if (sortBy === 'division') {
-      const divs = [...new Set(budget.map(b=>b.div))].sort();
-      el.innerHTML = divs.map(div => {
-        const rows = budget.filter(b=>b.div===div);
-        const total = rows.reduce((s,b)=>s+b.amt,0);
-        const poCommit = divPOCommitment(div);
-        const cfg = DIV_CONFIG[div] || {};
-        return `
-          <div class="card">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-              <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
-              <div>
-                <div style="font-weight:700">${div} — ${cfg.name||div}</div>
-                <div style="font-size:11px;color:var(--text2)">Total Budget: ${fmt(total)} | PO Commitment: ${fmt(poCommit)} | Remaining: ${fmt(total-poCommit)}</div>
-              </div>
-            </div>
-            <div class="account-line header">
-              <span>Division</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Used</span><span>Balance</span>
-            </div>
-            ${rows.map(b=>{
-              // find PO commitment for this acct
-              const acctPOs = pos.filter(p=>p.fiscal!=='FY25' && p.acct===b.acct && (p.div===b.div));
-              const used = acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);
-              const bal = b.amt - used;
-              return `<div class="account-line">
-                <span class="tag tag-gray" style="font-size:10px">${b.div}</span>
-                <span style="font-weight:600">${b.acct}</span>
-                <span style="color:var(--text2)">${b.desc}</span>
-                <span style="text-align:right;font-weight:600">${fmt(b.amt)}</span>
-                <span style="text-align:right;color:var(--text2)">${fmt(used)}</span>
-                <span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</span>
-              </div>`;
-            }).join('')}
-          </div>`;
+    const sortBy=$('budgetSortBy')?.value||'division';
+    const divF=$('budgetDivFilter2')?.value||'';
+    const budget=STATE.budget.filter(b=>!divF||b.div===divF);
+    const el=$('budgetOverviewContent'); if(!el) return;
+    if(sortBy==='division'){
+      const divs=[...new Set(budget.map(b=>b.div))].sort();
+      el.innerHTML=divs.map(div=>{
+        const rows=budget.filter(b=>b.div===div);
+        const total=rows.reduce((s,b)=>s+b.amt,0);
+        const poCommit=divPOCommitment(div);
+        const cfg=DIV_CONFIG[div]||{};
+        return `<div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+          <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
+          <div><div style="font-weight:700">${div} — ${cfg.name||div}</div>
+          <div style="font-size:11px;color:var(--text2)">Budget: ${fmt(total)} | POs: ${fmt(poCommit)} | Balance: ${fmt(total-poCommit)}</div></div></div>
+          <div class="account-line header"><span>Div</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Used</span><span>Balance</span></div>
+          ${rows.map(b=>{
+            const acctPOs=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.acct===b.acct&&p.div===b.div);
+            const used=acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);
+            const bal=b.amt-used;
+            return `<div class="account-line"><span class="tag tag-gray" style="font-size:10px">${b.div}</span><span style="font-weight:600">${b.acct}</span><span style="color:var(--text2)">${b.desc}</span><span style="text-align:right;font-weight:600">${fmt(b.amt)}</span><span style="text-align:right;color:var(--text2)">${fmt(used)}</span><span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</span></div>`;
+          }).join('')}</div>`;
       }).join('');
     } else {
-      // Sort by account
-      const sorted = [...budget].sort((a,b)=>a.acct.localeCompare(b.acct));
-      el.innerHTML = `<div class="table-wrap"><table>
-        <thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Used</th><th style="text-align:right">Balance</th></tr></thead>
-        <tbody>${sorted.map(b=>{
-          const acctPOs = (DB.get('pos')||[]).filter(p=>p.fiscal!=='FY25'&&p.acct===b.acct&&p.div===b.div);
-          const used = acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);
-          const bal = b.amt-used;
-          return `<tr>
-            <td><strong>${b.acct}</strong></td>
-            <td style="color:var(--text2)">${b.desc}</td>
-            <td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td>
-            <td style="text-align:right">${fmt(b.amt)}</td>
-            <td style="text-align:right;color:var(--text2)">${fmt(used)}</td>
-            <td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table></div>`;
+      const sorted=[...budget].sort((a,b)=>a.acct.localeCompare(b.acct));
+      el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Used</th><th style="text-align:right">Balance</th></tr></thead><tbody>
+        ${sorted.map(b=>{const acctPOs=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.acct===b.acct&&p.div===b.div);const used=acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);const bal=b.amt-used;
+        return `<tr><td><strong>${b.acct}</strong></td><td style="color:var(--text2)">${b.desc}</td><td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td><td style="text-align:right">${fmt(b.amt)}</td><td style="text-align:right;color:var(--text2)">${fmt(used)}</td><td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td></tr>`;}).join('')}
+      </tbody></table></div>`;
     }
   },
 
-  pickBudgetFile() {
-    const inp = document.createElement('input');
-    inp.type='file'; inp.accept='.xlsx,.csv';
-    inp.onchange = e => {
-      const f = e.target.files[0];
-      if (!f) return;
-      $('budgetFileLabel').textContent = '✓ ' + f.name;
-      $('budgetFileZone').classList.add('has-file');
-      $('importBudgetBtn').style.display='inline-flex';
-      $('budgetImportResult').innerHTML = `<div class="info-box">File selected: <strong>${f.name}</strong>. Click "Import Budget" to process.</div>`;
-    };
-    inp.click();
+  // ── SUPERVISOR MANAGEMENT ──────────────────────────────────────────
+  renderSupervisorList() {
+    const el=$('supervisorListAdmin'); if(!el) return;
+    const sups=STATE.supervisors;
+    if(!sups.length){el.innerHTML='<div class="simple-notice">No supervisors added yet.</div>';return;}
+    el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Name</th><th>Division</th><th>PIN</th><th>Actions</th></tr></thead><tbody>
+      ${sups.map((s,i)=>`<tr>
+        <td><strong>${s.name}</strong></td>
+        <td><span class="tag tag-gray" style="font-size:10px">${s.div} ${DIV_CONFIG[s.div]?.name||''}</span></td>
+        <td><span style="font-family:monospace;letter-spacing:.1em">${s.pin}</span></td>
+        <td><div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-xs" onclick="Admin.editSupervisor(${i})">Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="Admin.deleteSupervisor(${i})">Remove</button>
+        </div></td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
   },
 
-  confirmBudgetImport() {
-    showToast('Budget import processed. Using pre-loaded FY26 data.', 'success');
-    $('budgetImportResult').innerHTML = `<div class="success-box">✓ Budget data loaded from FY26 Excel files. ${getBudget().length} line items across all divisions.</div>`;
-    Admin.renderBudgetOverview();
-    Admin.renderDashboard();
+  openAddSupervisor() {
+    $('supMgmtTitle').textContent='Add Supervisor';
+    $('supMgmtEditId').value='';
+    $('supMgmtName').value='';
+    $('supMgmtDiv').value='';
+    $('supMgmtPin').value='';
+    $('supMgmtPin2').value='';
+    $('supMgmtErr').style.display='none';
+    $('supMgmtModal').style.display='flex';
   },
 
-  pickPOImportFile() {
-    const inp = document.createElement('input');
-    inp.type='file'; inp.accept='.xlsx,.csv';
-    inp.onchange = e => {
-      const f = e.target.files[0];
-      if (!f) return;
-      $('poImportLabel').textContent='✓ '+f.name;
-      $('poImportZone').classList.add('has-file');
-      $('importPOBtn').style.display='inline-flex';
-      $('poImportPreview').innerHTML=`<div class="info-box">File selected: ${f.name}. Click "Import POs" to process.</div>`;
-    };
-    inp.click();
+  editSupervisor(idx) {
+    const s=STATE.supervisors[idx];
+    $('supMgmtTitle').textContent='Edit Supervisor';
+    $('supMgmtEditId').value=idx;
+    $('supMgmtName').value=s.name;
+    $('supMgmtDiv').value=s.div;
+    $('supMgmtPin').value=s.pin;
+    $('supMgmtPin2').value=s.pin;
+    $('supMgmtErr').style.display='none';
+    $('supMgmtModal').style.display='flex';
   },
 
-  confirmPOImport() {
-    showToast('POs imported. Using pre-loaded FY26 PO data.', 'success');
-    $('poImportPreview').innerHTML=`<div class="success-box">✓ ${PO_SEED.length} POs loaded. ${PO_SEED.filter(p=>p.fiscal==='FY25').length} flagged as FY25.</div>`;
-    Admin.renderPOTable();
+  async saveSupervisor() {
+    const name=$('supMgmtName').value.trim();
+    const div=$('supMgmtDiv').value;
+    const pin=$('supMgmtPin').value.trim();
+    const pin2=$('supMgmtPin2').value.trim();
+    const editIdx=$('supMgmtEditId').value;
+    const err=$('supMgmtErr');
+
+    if(!name||!div||!pin){err.textContent='All fields are required.';err.style.display='block';return;}
+    if(pin!==pin2){err.textContent='PINs do not match.';err.style.display='block';return;}
+    if(pin.length<4){err.textContent='PIN must be at least 4 digits.';err.style.display='block';return;}
+
+    const sups=[...STATE.supervisors];
+    if(editIdx!==''){
+      sups[parseInt(editIdx)]={name,div,pin};
+    } else {
+      if(sups.find(s=>s.name.toLowerCase()===name.toLowerCase())){err.textContent='A supervisor with this name already exists.';err.style.display='block';return;}
+      sups.push({name,div,pin});
+    }
+
+    showLoading('Saving…');
+    await SDB.setSetting('supervisors', sups);
+    STATE.supervisors=sups;
+    hideLoading();
+    App.closeModal('supMgmtModal');
+    Admin.renderSupervisorList();
+    showToast(`Supervisor ${name} saved ✓`,'success');
+  },
+
+  async deleteSupervisor(idx) {
+    const s=STATE.supervisors[idx];
+    if(!confirm(`Remove supervisor "${s.name}"?`)) return;
+    const sups=STATE.supervisors.filter((_,i)=>i!==idx);
+    showLoading('Saving…');
+    await SDB.setSetting('supervisors',sups);
+    STATE.supervisors=sups;
+    hideLoading();
+    Admin.renderSupervisorList();
+    showToast('Supervisor removed.','success');
+  },
+
+  // ── PO MANAGEMENT ─────────────────────────────────────────────────
+  populatePOSelect() {
+    const opts=`<option value="">— Select PO —</option>${STATE.pos.filter(p=>p.fiscal!=='FY25').map(p=>`<option value="${p._id||p.poNum}">${p.poNum} — ${p.vendor} (${p.div||'Multi'}) [${fmt(p.balance)} left]</option>`).join('')}`;
+    if($('invPOSelect')) $('invPOSelect').innerHTML=opts;
+  },
+
+  renderPOTable() {
+    const search=($('poSearchInput')?.value||'').toLowerCase();
+    const divF=$('adminDivFilter')?.value||'';
+    const yearF=$('adminYearFilter')?.value||'';
+    const statusF=$('poStatusFilter')?.value||'';
+    const pos=STATE.pos.filter(p=>{
+      if(divF && p.div!==divF && !(p.multiAcct&&p.multiAcct.includes(divF))) return false;
+      if(yearF && p.fiscal!==yearF) return false;
+      if(statusF==='fy25' && p.fiscal!=='FY25') return false;
+      if(statusF==='active' && p.fiscal==='FY25') return false;
+      if(statusF==='tricky' && !p.tricky) return false;
+      if(search && !JSON.stringify(p).toLowerCase().includes(search)) return false;
+      return true;
+    });
+    const tbody=$('poTableBody');
+    if(!pos.length){tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">No POs found.</td></tr>';return;}
+    tbody.innerHTML=pos.map(p=>{
+      const isFY25=p.fiscal==='FY25';
+      return `<tr style="${isFY25?'opacity:.7':''}">
+        <td><strong>${p.poNum}</strong></td>
+        <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}</td>
+        <td>${p.div?`<span class="tag tag-gray" style="font-size:10px">${p.div}</span>`:'<span style="color:var(--text3)">Multi</span>'}</td>
+        <td>${tagHTML(p.code)}</td>
+        <td>${fmt(p.start)}</td>
+        <td><div>${fmt(p.balance)}</div>${!isFY25?budgetBar(p.start-p.balance,p.start):''}</td>
+        <td style="color:var(--text2);font-size:11px">${p.type||p.code||'—'}</td>
+        <td style="font-size:11px">${p.acct||'<span style="color:var(--text3)">Multi</span>'}</td>
+        <td style="font-size:11px;color:var(--text2)">${p.date||'—'}</td>
+        <td>${isFY25?'<span class="fy25-warn">FY25</span>':p.tricky?'<span class="tag tag-orange" style="font-size:10px">🔗 Needs Link</span>':'<span class="tag tag-green" style="font-size:10px">Active</span>'}</td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-xs" onclick="Admin.viewPO('${p.poNum}')">View</button>
+          <button class="btn btn-secondary btn-xs" onclick="Admin.openNewPOModal('${p.poNum}')">Edit</button>
+        </div></td>
+      </tr>`;
+    }).join('');
   },
 
   openNewPOModal(poNum=null) {
-    Admin._editPOId = poNum;
-    Admin._poAccountLineCount = 0;
+    Admin._poAccountLineCount=0; Admin._editPOSupaId=null;
     $('poAccountLines').innerHTML='';
-    if (poNum) {
-      const pos = DB.get('pos')||[];
-      const po = pos.find(p=>p.poNum===poNum);
-      if (!po) return;
+    if(poNum){
+      const po=STATE.pos.find(p=>p.poNum===poNum);
+      if(!po) return;
+      Admin._editPOSupaId=po._id;
       $('newPOModalTitle').textContent='Edit PO '+po.poNum;
-      $('poId').value=po.poNum;
-      $('poVendor').value=po.vendor;
-      $('poType').value=po.code;
-      $('poFiscalYear').value=po.fiscal;
-      $('poPODate').value=po.date||'';
-      $('poStartingAmount').value=po.start||'';
-      $('poNotes').value=po.notes||'';
-      $('poTricky').checked=!!po.tricky;
-      Admin.poTypeChanged();
-      // add existing account line
-      if (po.div && po.acct) {
-        Admin.addPOAccountLine(po.div, po.acct, po.start);
-      }
+      $('poId').value=po.poNum; $('poVendor').value=po.vendor;
+      $('poType').value=po.code; $('poFiscalYear').value=po.fiscal;
+      $('poPODate').value=po.date||''; $('poStartingAmount').value=po.start||'';
+      $('poNotes').value=po.notes||''; $('poTricky').checked=!!po.tricky;
+      if(po.div&&po.acct) Admin.addPOAccountLine(po.div,po.acct,po.start);
     } else {
       $('newPOModalTitle').textContent='New Purchase Order';
       ['poId','poVendor','poStartingAmount','poNotes','poLinkedContract'].forEach(id=>$(id).value='');
@@ -2100,452 +2273,315 @@ const Admin = {
   },
 
   poTypeChanged() {
-    const v = $('poType').value;
-    const date = $('poPODate').value;
-    if (date && new Date(date) < new Date('2025-10-01')) {
-      $('poFY25warn').style.display='block';
-      $('poFiscalYear').value='FY25';
-    } else {
-      $('poFY25warn').style.display='none';
-    }
+    const date=$('poPODate').value;
+    if(date && new Date(date)<new Date('2025-10-01')){$('poFY25warn').style.display='block';$('poFiscalYear').value='FY25';}
+    else {$('poFY25warn').style.display='none';}
   },
 
-  addPOAccountLine(div='', acct='', amt='') {
-    const i = Admin._poAccountLineCount++;
-    const divOptions = Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}" ${div===k?'selected':''}>${k} ${v.name}</option>`).join('');
-    const el = document.createElement('div');
+  addPOAccountLine(div='',acct='',amt='') {
+    const i=Admin._poAccountLineCount++;
+    const divOpts=Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}" ${div===k?'selected':''}>${k} ${v.name}</option>`).join('');
+    const el=document.createElement('div');
     el.style.cssText='display:grid;grid-template-columns:130px 90px 1fr 110px 30px;gap:6px;align-items:center;margin-bottom:8px';
-    el.innerHTML=`
-      <select class="form-input" style="font-size:12px" id="paDiv_${i}"><option value="">Division</option>${divOptions}</select>
+    el.innerHTML=`<select class="form-input" style="font-size:12px" id="paDiv_${i}"><option value="">Division</option>${divOpts}</select>
       <input type="text" class="form-input" style="font-size:12px" id="paAcct_${i}" placeholder="Acct #" value="${acct}">
-      <input type="text" class="form-input" style="font-size:12px" id="paDesc_${i}" placeholder="Description (optional)">
+      <input type="text" class="form-input" style="font-size:12px" id="paDesc_${i}" placeholder="Description">
       <input type="number" class="form-input" style="font-size:12px" id="paAmt_${i}" placeholder="Amount" value="${amt}">
-      <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1">×</button>
-    `;
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1">×</button>`;
     $('poAccountLines').appendChild(el);
   },
 
-  savePO() {
-    const poNum = $('poId').value.trim();
-    const vendor = $('poVendor').value.trim();
-    if (!poNum || !vendor) { showToast('PO # and Vendor are required.','error'); return; }
-    const code = $('poType').value;
-    const fiscal = $('poFiscalYear').value;
-    const date = $('poPODate').value;
-    const start = parseFloat($('poStartingAmount').value)||0;
-    const notes = $('poNotes').value;
-    const tricky = $('poTricky').checked;
-
-    // Gather account lines
-    const lines = [];
-    document.querySelectorAll('#poAccountLines > div').forEach((el,i) => {
-      const d = el.querySelector('[id^=paDiv_]')?.value;
-      const a = el.querySelector('[id^=paAcct_]')?.value;
-      const amt = parseFloat(el.querySelector('[id^=paAmt_]')?.value)||0;
-      if (d||a) lines.push({div:d,acct:a,amt});
+  async savePO() {
+    const poNum=$('poId').value.trim(), vendor=$('poVendor').value.trim();
+    if(!poNum||!vendor){showToast('PO # and Vendor are required.','error');return;}
+    const code=$('poType').value, fiscal=$('poFiscalYear').value;
+    const date=$('poPODate').value, start=parseFloat($('poStartingAmount').value)||0;
+    const lines=[];
+    document.querySelectorAll('#poAccountLines > div').forEach(el=>{
+      const d=el.querySelector('[id^=paDiv_]')?.value, a=el.querySelector('[id^=paAcct_]')?.value;
+      const am=parseFloat(el.querySelector('[id^=paAmt_]')?.value)||0;
+      if(d||a) lines.push({div:d,acct:a,amt:am});
     });
-
-    const pos = DB.get('pos')||[];
-    const existing = pos.findIndex(p=>p.poNum===poNum);
-    const po = {
-      poNum, vendor, code, fiscal, date, start, balance:start,
-      div: lines[0]?.div||null, acct:lines[0]?.acct||null,
-      multiAcct: lines.length>1 ? lines.map(l=>`${l.div}-${l.acct}:${l.amt}`).join(', ') : null,
-      notes, tricky, type: $('poType').selectedOptions[0]?.text||'',
-    };
-    if (existing>=0) pos[existing]=po; else pos.push(po);
-    DB.set('pos', pos);
+    const po={poNum,vendor,code,fiscal,date,start,balance:start,
+      div:lines[0]?.div||null, acct:lines[0]?.acct||null,
+      multiAcct:lines.length>1?lines.map(l=>`${l.div}-${l.acct}:${l.amt}`).join(', '):null,
+      notes:$('poNotes').value, tricky:$('poTricky').checked,
+      type:$('poType').selectedOptions[0]?.text||''};
+    showLoading('Saving…');
+    if(Admin._editPOSupaId){
+      await SDB.update('purchase_orders',Admin._editPOSupaId,po);
+    } else {
+      await SDB.insert('purchase_orders',po);
+    }
+    STATE.pos=await SDB.getAll('purchase_orders');
+    hideLoading();
     App.closeModal('newPOModal');
-    Admin.renderPOTable();
-    Admin.populatePOSelect();
-    Admin.renderDashboard();
-    showToast(`PO ${poNum} saved ✓`, 'success');
-  },
-
-  pickPOPDF() {
-    const inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf';
-    inp.onchange=e=>{const f=e.target.files[0]; if(f){$('poPDFLabel').textContent='✓ '+f.name; $('poPDFZone').classList.add('has-file');}};
-    inp.click();
-  },
-
-  renderPOTable() {
-    const search = ($('poSearchInput')?.value||'').toLowerCase();
-    const divF = $('adminDivFilter')?.value||'';
-    const yearF = $('adminYearFilter')?.value||'';
-    const statusF = $('poStatusFilter')?.value||'';
-    const pos = (DB.get('pos')||[]).filter(p => {
-      if (divF && p.div!==divF && !(p.multiAcct&&p.multiAcct.includes(divF))) return false;
-      if (yearF && p.fiscal!==yearF) return false;
-      if (statusF==='fy25' && p.fiscal!=='FY25') return false;
-      if (statusF==='active' && p.fiscal==='FY25') return false;
-      if (statusF==='tricky' && !p.tricky) return false;
-      if (search && !JSON.stringify(p).toLowerCase().includes(search)) return false;
-      return true;
-    });
-    const tbody = $('poTableBody');
-    if (!pos.length) { tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--text2)">No POs found.</td></tr>'; return; }
-    tbody.innerHTML = pos.map(p => {
-      const pct = p.start ? Math.round((1-p.balance/p.start)*100) : 0;
-      const isFY25 = p.fiscal==='FY25';
-      const divCfg = DIV_CONFIG[p.div];
-      return `<tr style="${isFY25?'opacity:.7':''}">
-        <td><strong>${p.poNum}</strong></td>
-        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}</td>
-        <td>${p.div?`<span class="tag tag-gray" style="font-size:10px">${p.div}</span>`:'<span style="color:var(--text3)">Multi</span>'}</td>
-        <td>${tagHTML(p.code||'')}</td>
-        <td>${fmt(p.start)}</td>
-        <td>
-          <div style="min-width:90px">${fmt(p.balance)}</div>
-          ${!isFY25?budgetBar(p.start-p.balance,p.start):''}
-        </td>
-        <td style="color:var(--text2);font-size:11px">${p.type||p.code||'—'}</td>
-        <td style="font-size:11px">${p.acct||'<span style="color:var(--text3)">Multi</span>'}</td>
-        <td style="font-size:11px;color:var(--text2)">${p.date||'—'}</td>
-        <td>
-          ${isFY25 ? '<span class="fy25-warn">FY25</span>' : ''}
-          ${p.tricky ? '<span class="tag tag-orange" style="font-size:10px">🔗 Needs Link</span>' : ''}
-          ${(!isFY25&&!p.tricky)?'<span class="tag tag-green" style="font-size:10px">Active</span>':''}
-        </td>
-        <td>
-          <div style="display:flex;gap:4px">
-            <button class="btn btn-secondary btn-xs" onclick="Admin.viewPO('${p.poNum}')">View</button>
-            <button class="btn btn-secondary btn-xs" onclick="Admin.openNewPOModal('${p.poNum}')">Edit</button>
-          </div>
-        </td>
-      </tr>`;
-    }).join('');
+    Admin.renderPOTable(); Admin.populatePOSelect(); Admin.renderDashboard();
+    showToast(`PO ${poNum} saved ✓`,'success');
   },
 
   viewPO(poNum) {
-    const pos = DB.get('pos')||[];
-    const po = pos.find(p=>p.poNum===poNum);
-    if (!po) return;
-    const invs = (DB.get('invoices')||[]).filter(i=>i.poNum===poNum);
-    const totalInv = invs.reduce((s,i)=>s+i.invAmount,0);
-    $('poDetailTitle').textContent = `PO ${po.poNum} — ${po.vendor}`;
-    $('poDetailBody').innerHTML = `
-      <div class="form-row" style="margin-bottom:16px">
+    const po=STATE.pos.find(p=>p.poNum===poNum); if(!po) return;
+    const invs=STATE.invoices.filter(i=>i.poNum===poNum);
+    const totalInv=invs.reduce((s,i)=>s+i.invAmount,0);
+    $('poDetailTitle').textContent=`PO ${po.poNum} — ${po.vendor}`;
+    $('poDetailBody').innerHTML=`
+      <div class="form-row" style="margin-bottom:14px">
         <div><div class="stat-label">Vendor</div><div style="font-weight:600">${po.vendor}</div></div>
-        <div><div class="stat-label">PO Code</div>${tagHTML(po.code)}</div>
-        <div><div class="stat-label">Fiscal Year</div>${po.fiscal}</div>
+        <div><div class="stat-label">Code</div>${tagHTML(po.code)}</div>
+        <div><div class="stat-label">FY</div>${po.fiscal}</div>
         <div><div class="stat-label">Division</div>${po.div||'Multi'}</div>
       </div>
-      <div class="form-row" style="margin-bottom:16px">
-        <div><div class="stat-label">Starting Amount</div><div style="font-weight:700;font-size:18px">${fmt(po.start)}</div></div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div><div class="stat-label">Starting</div><div style="font-weight:700;font-size:18px">${fmt(po.start)}</div></div>
         <div><div class="stat-label">Balance</div><div style="font-weight:700;font-size:18px;color:var(--success)">${fmt(po.balance)}</div></div>
-        <div><div class="stat-label">Invoice Total</div><div style="font-weight:700;font-size:18px;color:var(--coral)">${fmt(totalInv)}</div></div>
+        <div><div class="stat-label">Invoiced</div><div style="font-weight:700;font-size:18px;color:var(--coral)">${fmt(totalInv)}</div></div>
       </div>
-      ${po.multiAcct?`<div class="info-box" style="margin-bottom:14px"><strong>Distribution:</strong> ${po.multiAcct}</div>`:''}
-      ${po.notes?`<div class="simple-notice" style="margin-bottom:14px">${po.notes}</div>`:''}
-      ${po.fiscal==='FY25'?'<div class="warning-box" style="margin-bottom:14px">⚠️ FY25 PO — cannot roll. Please use FY26 POs. Invoices received before Sept 1 2026 will be noted.</div>':''}
-      ${po.tricky?'<div class="warning-box" style="margin-bottom:14px">🔗 Budget link needed — distribution unknown. Please link account lines.</div>':''}
-      <div class="section-header" style="margin-top:8px"><span class="section-title">Invoices Against This PO</span></div>
-      ${invs.length ? `<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Amount</th><th>Date</th><th>Approved</th></tr></thead><tbody>
-        ${invs.map(i=>`<tr><td>${i.invNumber}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate}</td><td>${i.approved?'✓ Yes':'Pending'}</td></tr>`).join('')}
-      </tbody></table></div>` : '<div class="simple-notice">No invoices entered against this PO yet.</div>'}
-    `;
+      ${po.multiAcct?`<div class="info-box" style="margin-bottom:12px"><strong>Distribution:</strong> ${po.multiAcct}</div>`:''}
+      ${po.notes?`<div class="simple-notice" style="margin-bottom:12px">${po.notes}</div>`:''}
+      ${po.fiscal==='FY25'?'<div class="warning-box" style="margin-bottom:12px">⚠️ FY25 PO — cannot roll. Invoices before Sept 1 2026 noted.</div>':''}
+      ${po.tricky?'<div class="warning-box" style="margin-bottom:12px">🔗 Budget link needed.</div>':''}
+      <div class="section-header"><span class="section-title">Invoices</span></div>
+      ${invs.length?`<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Amount</th><th>Date</th><th>Approved</th></tr></thead><tbody>${invs.map(i=>`<tr><td>${i.invNumber}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate}</td><td>${i.approved?'✓':'Pending'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="simple-notice">No invoices yet.</div>'}`;
     $('poDetailModal').style.display='flex';
   },
 
-  populatePOSelect() {
-    const pos = DB.get('pos')||[];
-    const opts = ['<option value="">— Select PO —</option>',
-      ...pos.filter(p=>p.fiscal!=='FY25').map(p=>`<option value="${p.poNum}">${p.poNum} — ${p.vendor} (${p.div||'Multi'}) [${fmt(p.balance)} left]</option>`)
-    ].join('');
-    ['invPOSelect'].forEach(id=>{ if($(id)) $(id).innerHTML=opts; });
-  },
+  pickPOPDF() { const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';inp.onchange=e=>{const f=e.target.files[0];if(f){$('poPDFLabel').textContent='✓ '+f.name;$('poPDFZone').classList.add('has-file');}};inp.click(); },
 
+  // ── INVOICE ───────────────────────────────────────────────────────
   invoicePOSelected() {
-    const poNum = $('invPOSelect').value;
-    const pos = DB.get('pos')||[];
-    const po = pos.find(p=>p.poNum===poNum);
-    if (!po) { $('invVendor').value=''; $('invPOBalance').style.display='none'; return; }
-    $('invVendor').value = po.vendor;
-    $('invPOBalance').innerHTML = `PO Balance: <strong>${fmt(po.balance)}</strong> of ${fmt(po.start)} | Type: <strong>${po.type||po.code}</strong>`;
+    const val=$('invPOSelect').value;
+    const po=STATE.pos.find(p=>(p._id===val||p.poNum===val));
+    if(!po){$('invVendor').value='';$('invPOBalance').style.display='none';return;}
+    $('invVendor').value=po.vendor;
+    $('invPOBalance').innerHTML=`Balance: <strong>${fmt(po.balance)}</strong> of ${fmt(po.start)} · ${po.type||po.code}`;
     $('invPOBalance').style.display='block';
-    $('fy25InvWarn').style.display = po.fiscal==='FY25' ? 'block' : 'none';
+    $('fy25InvWarn').style.display=po.fiscal==='FY25'?'block':'none';
   },
 
   checkBlanketLimit() {
-    const poNum = $('invPOSelect')?.value;
-    if (!poNum) return;
-    const po = (DB.get('pos')||[]).find(p=>p.poNum===poNum);
-    if (!po) return;
-    const amt = parseFloat($('invAmount')?.value)||0;
-    const isLimited = ['PBK2','SPO2'].includes(po.code);
-    const warn = $('blanketWarning');
-    if (warn) warn.style.display = isLimited && amt > 1000 ? 'block' : 'none';
+    const val=$('invPOSelect')?.value; if(!val) return;
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val); if(!po) return;
+    const amt=parseFloat($('invAmount')?.value)||0;
+    const lim=['PBK2','SPO2'].includes(po.code);
+    $('blanketWarning').style.display=lim&&amt>1000?'block':'none';
   },
 
-  saveInvoice() {
-    const poNum = $('invPOSelect').value;
-    const invNum = $('invNumber').value.trim();
-    const amt = parseFloat($('invAmount').value)||0;
-    const date = $('invDate').value;
-    if (!poNum || !invNum || !amt || !date) { showToast('Please fill all required fields.','error'); return; }
-
-    const pos = DB.get('pos')||[];
-    const po = pos.find(p=>p.poNum===poNum);
-    const invs = DB.get('invoices')||[];
-    const inv = {
-      id: Date.now().toString(),
-      poNum, invNumber:invNum, invAmount:amt, invDate:date,
-      invVendor:po?.vendor||'', invMonth:$('invMonth').value,
-      invNotes:$('invNotes').value,
-      requireApproval:$('invRequireApproval').checked,
-      approved:!$('invRequireApproval').checked,
-      div:po?.div, acct:po?.acct,
-      createdAt:today(),
-    };
-    invs.push(inv);
-    DB.set('invoices', invs);
-
+  async saveInvoice() {
+    const val=$('invPOSelect').value, invNum=$('invNumber').value.trim();
+    const amt=parseFloat($('invAmount').value)||0, date=$('invDate').value;
+    if(!val||!invNum||!amt||!date){showToast('Fill all required fields.','error');return;}
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    const inv={poNum:po?.poNum||val, invNumber:invNum, invAmount:amt, invDate:date,
+      invVendor:po?.vendor||'', invMonth:$('invMonth').value, invNotes:$('invNotes').value,
+      requireApproval:$('invRequireApproval').checked, approved:!$('invRequireApproval').checked,
+      div:po?.div, acct:po?.acct, createdAt:today()};
+    showLoading('Saving…');
+    await SDB.insert('invoices',inv);
     // Deduct from PO balance
-    if (po && po.fiscal!=='FY25') {
-      po.balance = (po.balance||po.start) - amt;
-      DB.set('pos', pos);
+    if(po && po.fiscal!=='FY25' && po._id){
+      const updPO={...po, balance:(po.balance||po.start)-amt};
+      await SDB.update('purchase_orders',po._id,updPO);
     }
-
+    STATE.invoices=await SDB.getAll('invoices');
+    STATE.pos=await SDB.getAll('purchase_orders');
+    hideLoading();
     ['invPOSelect','invNumber','invAmount','invDate','invNotes'].forEach(id=>{if($(id))$(id).value='';});
-    $('invVendor').value=''; $('invMonth').value='';
-    $('invRequireApproval').checked=false;
-    $('invPOBalance').style.display='none';
-    showToast('Invoice saved ✓', 'success');
-    Admin.renderDashboard();
-    Admin.renderPOTable();
-    Admin.renderInvoiceList();
-    Admin.updateBadges();
+    $('invVendor').value='';$('invMonth').value='';$('invRequireApproval').checked=false;$('invPOBalance').style.display='none';
+    showToast('Invoice saved ✓','success');
+    Admin.renderDashboard(); Admin.renderPOTable(); Admin.renderInvoiceList(); Admin.populatePOSelect(); Admin.updateBadges();
   },
 
   renderInvoiceList() {
-    const search = ($('invSearchInput')?.value||'').toLowerCase();
-    const invs = (DB.get('invoices')||[]).filter(i=>!search||JSON.stringify(i).toLowerCase().includes(search));
-    const tbody = $('invoiceListBody');
-    if (!tbody) return;
-    if (!invs.length) { tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">No invoices yet.</td></tr>'; return; }
-    tbody.innerHTML = invs.map(i=>`<tr>
-      <td><strong>${i.invNumber}</strong></td>
-      <td>${i.poNum||'—'}</td>
-      <td>${i.invVendor||'—'}</td>
+    const search=($('invSearchInput')?.value||'').toLowerCase();
+    const invs=STATE.invoices.filter(i=>!search||JSON.stringify(i).toLowerCase().includes(search));
+    const tbody=$('invoiceListBody'); if(!tbody) return;
+    if(!invs.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">No invoices yet.</td></tr>';return;}
+    tbody.innerHTML=[...invs].reverse().map(i=>`<tr>
+      <td><strong>${i.invNumber}</strong></td><td>${i.poNum||'—'}</td><td>${i.invVendor||'—'}</td>
       <td>${i.div?`<span class="tag tag-gray" style="font-size:10px">${i.div}</span>`:'—'}</td>
-      <td>${i.acct||'—'}</td>
-      <td><strong>${fmt(i.invAmount)}</strong></td>
-      <td>${i.invDate||'—'}</td>
-      <td>${i.invMonth||'—'}</td>
+      <td>${i.acct||'—'}</td><td><strong>${fmt(i.invAmount)}</strong></td>
+      <td>${i.invDate||'—'}</td><td>${i.invMonth||'—'}</td>
       <td>${i.approved?'<span class="tag tag-green">✓ Approved</span>':'<span class="tag tag-yellow">Pending</span>'}</td>
-      <td>
-        ${!i.approved?`<button class="btn btn-success btn-xs" onclick="App.showApproveInv('${i.id}','Invoice ${i.invNumber} — ${fmt(i.invAmount)}')">Approve</button>`:''}
-        <button class="btn btn-secondary btn-xs" onclick="Admin.deleteInvoice('${i.id}')">Delete</button>
-      </td>
+      <td><div style="display:flex;gap:4px">
+        ${!i.approved?`<button class="btn btn-success btn-xs" onclick="App.showApproveInv('${i._id}','Invoice ${i.invNumber} — ${fmt(i.invAmount)}')">Approve</button>`:''}
+        <button class="btn btn-secondary btn-xs" onclick="Admin.deleteInvoice('${i._id}')">Delete</button>
+      </div></td>
     </tr>`).join('');
   },
 
-  deleteInvoice(id) {
-    if (!confirm('Delete this invoice?')) return;
-    let invs = DB.get('invoices')||[];
-    const inv = invs.find(i=>i.id===id);
-    if (inv) {
-      // Restore PO balance
-      const pos = DB.get('pos')||[];
-      const po = pos.find(p=>p.poNum===inv.poNum);
-      if (po && po.fiscal!=='FY25') { po.balance += inv.invAmount; DB.set('pos',pos); }
+  async deleteInvoice(supaId) {
+    if(!confirm('Delete this invoice?')) return;
+    const inv=STATE.invoices.find(i=>i._id===supaId);
+    if(inv){
+      const po=STATE.pos.find(p=>p.poNum===inv.poNum);
+      if(po&&po.fiscal!=='FY25'&&po._id){await SDB.update('purchase_orders',po._id,{...po,balance:po.balance+inv.invAmount});}
     }
-    DB.set('invoices', invs.filter(i=>i.id!==id));
+    showLoading('Deleting…');
+    await SDB.delete('invoices',supaId);
+    STATE.invoices=await SDB.getAll('invoices');
+    STATE.pos=await SDB.getAll('purchase_orders');
+    hideLoading();
     Admin.renderInvoiceList(); Admin.renderPOTable(); Admin.renderDashboard();
     showToast('Invoice deleted.','success');
   },
 
+  // ── PENDING ORDERS ────────────────────────────────────────────────
   renderPendingOrders() {
-    const orders = DB.get('pendingOrders')||[];
-    const tbody = $('pendingOrdersBody');
-    if (!orders.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text2)">No pending orders.</td></tr>'; return; }
-    tbody.innerHTML = orders.map(o=>`<tr>
-      <td>${o.date}</td>
-      <td><span class="tag tag-gray" style="font-size:10px">${o.div||'—'}</span></td>
-      <td>${o.poNum||'—'}</td>
-      <td>${o.vendor||'—'}</td>
-      <td>${fmt(o.amount)}</td>
+    const orders=STATE.pendingOrders;
+    const tbody=$('pendingOrdersBody'); if(!tbody) return;
+    if(!orders.length){tbody.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text2)">No pending orders.</td></tr>';return;}
+    tbody.innerHTML=[...orders].reverse().map(o=>`<tr>
+      <td>${o.date}</td><td><span class="tag tag-gray" style="font-size:10px">${o.div||'—'}</span></td>
+      <td>${o.poNum||'—'}</td><td>${o.vendor||'—'}</td><td>${fmt(o.amount)}</td>
       <td style="color:var(--text2);font-size:12px">${o.description||'—'}</td>
       <td><span class="tag ${o.status==='matched'?'tag-green':'tag-yellow'}">${o.status||'pending'}</span></td>
-      <td>
-        <button class="btn btn-success btn-xs" onclick="Admin.matchOrder('${o.id}')">Match Invoice</button>
-        <button class="btn btn-secondary btn-xs" onclick="Admin.dismissOrder('${o.id}')">Dismiss</button>
-      </td>
+      <td><button class="btn btn-secondary btn-xs" onclick="Admin.dismissOrder('${o._id}')">Dismiss</button></td>
     </tr>`).join('');
   },
 
-  matchOrder(id) { showToast('Go to Invoice Entry and select the related PO to match this order.'); },
-  dismissOrder(id) {
-    let orders = DB.get('pendingOrders')||[];
-    orders = orders.filter(o=>o.id!==id);
-    DB.set('pendingOrders',orders); Admin.renderPendingOrders(); Admin.updateBadges();
+  async dismissOrder(supaId) {
+    showLoading('Saving…');
+    await SDB.delete('pending_orders',supaId);
+    STATE.pendingOrders=await SDB.getAll('pending_orders');
+    hideLoading(); Admin.renderPendingOrders(); Admin.updateBadges();
   },
 
+  // ── CHANGE REQUESTS ───────────────────────────────────────────────
   renderChangeRequests() {
-    const crs = DB.get('changeRequests')||[];
-    const tbody = $('changeRequestsBody');
-    if (!crs.length) { tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">No change requests.</td></tr>'; return; }
-    tbody.innerHTML = crs.map(c=>`<tr>
-      <td>${c.date}</td>
-      <td>${c.poNum}</td>
-      <td>${c.vendor||'—'}</td>
-      <td style="color:var(--text2)">${c.reason||'—'}</td>
-      <td>${c.requestedBy}</td>
+    const crs=STATE.changeRequests;
+    const tbody=$('changeRequestsBody'); if(!tbody) return;
+    if(!crs.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">No change requests.</td></tr>';return;}
+    tbody.innerHTML=[...crs].reverse().map(c=>`<tr>
+      <td>${c.date}</td><td>${c.poNum}</td><td>${c.vendor||'—'}</td>
+      <td style="color:var(--text2)">${c.reason||'—'}</td><td>${c.requestedBy}</td>
       <td><span class="tag ${c.status==='approved'?'tag-green':c.status==='rejected'?'tag-red':'tag-yellow'}">${c.status}</span></td>
       <td>${c.inforDate?`<span class="tag tag-green">${c.inforDate}</span>`:'<span class="tag tag-gray">—</span>'}</td>
-      <td>${c.poDelay?`<span class="tag tag-red">Delayed</span><div style="font-size:10px;color:var(--text2)">${c.delayReason||''}</div>`:'<span class="tag tag-green">—</span>'}</td>
-      <td>
-        ${c.status==='pending'?`<button class="btn btn-primary btn-xs" onclick="Admin.openCRApprove('${c.id}')">Process</button>`:''}
-      </td>
+      <td>${c.poDelay?`<span class="tag tag-red">Delayed</span><div style="font-size:10px">${c.delayReason||''}</div>`:'—'}</td>
+      <td>${c.status==='pending'?`<button class="btn btn-primary btn-xs" onclick="Admin.openCRApprove('${c._id}')">Process</button>`:''}</td>
     </tr>`).join('');
   },
 
-  openCRApprove(id) {
-    const crs = DB.get('changeRequests')||[];
-    const cr = crs.find(c=>c.id===id);
-    if (!cr) return;
-    $('crApproveDetail').innerHTML = `<strong>PO ${cr.poNum}</strong> — ${cr.reason||'Change request'}<br><small>${cr.details||''}</small>`;
-    $('crAction').value=''; $('crInforDate').value=''; $('crPoDelay').checked=false; $('crDelayFields').style.display='none'; $('crAdminNotes').value='';
+  openCRApprove(supaId) {
+    const cr=STATE.changeRequests.find(c=>c._id===supaId); if(!cr) return;
+    $('crApproveDetail').innerHTML=`<strong>PO ${cr.poNum}</strong> — ${cr.reason||'Change request'}<br><small>${cr.details||''}</small>`;
+    $('crAction').value='';$('crInforDate').value='';$('crPoDelay').checked=false;$('crDelayFields').style.display='none';$('crAdminNotes').value='';
     $('crPoDelay').onchange=()=>$('crDelayFields').style.display=$('crPoDelay').checked?'block':'none';
-    $('crApproveModal').dataset.crId=id;
+    $('crApproveModal').dataset.crId=supaId;
     $('crApproveModal').style.display='flex';
   },
 
-  processCR() {
-    const id = $('crApproveModal').dataset.crId;
-    const crs = DB.get('changeRequests')||[];
-    const cr = crs.find(c=>c.id===id);
-    if (!cr) return;
-    cr.status = $('crAction').value || 'pending';
-    cr.inforDate = $('crInforDate').value;
-    cr.poDelay = $('crPoDelay').checked;
-    cr.delayReason = $('crDelayReason').value;
-    cr.delayDate = $('crDelayDate').value;
-    cr.adminNotes = $('crAdminNotes').value;
-    DB.set('changeRequests',crs);
+  async processCR() {
+    const supaId=$('crApproveModal').dataset.crId;
+    const cr=STATE.changeRequests.find(c=>c._id===supaId); if(!cr) return;
+    const updated={...cr, status:$('crAction').value||'pending', inforDate:$('crInforDate').value,
+      poDelay:$('crPoDelay').checked, delayReason:$('crDelayReason').value,
+      delayDate:$('crDelayDate').value, adminNotes:$('crAdminNotes').value};
+    showLoading('Saving…');
+    await SDB.update('change_requests',supaId,updated);
+    STATE.changeRequests=await SDB.getAll('change_requests');
+    hideLoading();
     App.closeModal('crApproveModal');
     Admin.renderChangeRequests(); Admin.updateBadges();
     showToast('Change request updated ✓','success');
   },
 
+  // ── CONTRACTS ─────────────────────────────────────────────────────
   renderContracts() {
-    const contracts = DB.get('contracts')||[];
-    const tbody = $('contractsBody');
-    if (!tbody) return;
-    if (!contracts.length) { tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">No contracts entered yet.</td></tr>'; return; }
-    tbody.innerHTML = contracts.map(c=>{
-      const days = daysUntil(c.ctExpDate);
-      const expClass = days<0?'tag-red':days<30?'tag-red':days<60?'tag-orange':'tag-green';
-      return `<tr>
-        <td><strong>${c.ctNumber}</strong></td>
-        <td>${c.ctVendor}</td>
+    const contracts=STATE.contracts;
+    const tbody=$('contractsBody'); if(!tbody) return;
+    if(!contracts.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">No contracts yet.</td></tr>';return;}
+    tbody.innerHTML=contracts.map(c=>{
+      const days=daysUntil(c.ctExpDate);
+      const ec=days<0?'tag-red':days<30?'tag-red':days<60?'tag-orange':'tag-green';
+      return `<tr><td><strong>${c.ctNumber}</strong></td><td>${c.ctVendor}</td>
         <td><span class="tag tag-gray" style="font-size:10px">${c.ctDivision||'—'}</span></td>
-        <td>${c.ctType==='city'?'City':'Piggyback'}</td>
-        <td>${c.ctStartDate||'—'}</td>
-        <td><span class="tag ${expClass}">${c.ctExpDate} (${days}d)</span></td>
-        <td>${c.ctExtDate||'—'}</td>
-        <td><span class="tag tag-blue">${c.ctFuturePlan||'—'}</span></td>
+        <td>${c.ctType==='city'?'City':'Piggyback'}</td><td>${c.ctStartDate||'—'}</td>
+        <td><span class="tag ${ec}">${c.ctExpDate} (${days}d)</span></td>
+        <td>${c.ctExtDate||'—'}</td><td><span class="tag tag-blue">${c.ctFuturePlan||'—'}</span></td>
         <td>${c.ctLinkedPO||'—'}</td>
-        <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteContract('${c.id}')">Delete</button></td>
+        <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteContract('${c._id}')">Delete</button></td>
       </tr>`;
     }).join('');
   },
 
   openNewContractModal() {
     ['ctNumber','ctVendor','ctStartDate','ctExpDate','ctExtDate','ctLinkedPO','ctNotes'].forEach(id=>$(id).value='');
-    $('ctDivision').value=''; $('ctType').value=''; $('ctFuturePlan').value='';
+    $('ctDivision').value='';$('ctType').value='';$('ctFuturePlan').value='';
     $('newContractModal').style.display='flex';
   },
 
-  saveContract() {
-    const num = $('ctNumber').value.trim();
-    const vendor = $('ctVendor').value.trim();
-    const exp = $('ctExpDate').value;
-    if (!num||!vendor||!exp) { showToast('Contract #, Vendor and Expiration Date required.','error'); return; }
-    const contracts = DB.get('contracts')||[];
-    contracts.push({
-      id:Date.now().toString(),
-      ctNumber:num, ctVendor:vendor,
-      ctDivision:$('ctDivision').value, ctType:$('ctType').value,
-      ctStartDate:$('ctStartDate').value, ctExpDate:exp,
-      ctExtDate:$('ctExtDate').value, ctLinkedPO:$('ctLinkedPO').value,
-      ctFuturePlan:$('ctFuturePlan').value, ctNotes:$('ctNotes').value,
-    });
-    DB.set('contracts',contracts);
+  async saveContract() {
+    const num=$('ctNumber').value.trim(), vendor=$('ctVendor').value.trim(), exp=$('ctExpDate').value;
+    if(!num||!vendor||!exp){showToast('Contract #, Vendor and Expiration Date required.','error');return;}
+    const ct={ctNumber:num,ctVendor:vendor,ctDivision:$('ctDivision').value,ctType:$('ctType').value,
+      ctStartDate:$('ctStartDate').value,ctExpDate:exp,ctExtDate:$('ctExtDate').value,
+      ctLinkedPO:$('ctLinkedPO').value,ctFuturePlan:$('ctFuturePlan').value,ctNotes:$('ctNotes').value};
+    showLoading('Saving…');
+    await SDB.insert('contracts',ct);
+    STATE.contracts=await SDB.getAll('contracts');
+    hideLoading();
     App.closeModal('newContractModal');
     Admin.renderContracts(); Admin.updateBadges();
     showToast('Contract saved ✓','success');
   },
 
-  deleteContract(id) {
-    if (!confirm('Delete this contract?')) return;
-    DB.set('contracts',(DB.get('contracts')||[]).filter(c=>c.id!==id));
-    Admin.renderContracts();
+  async deleteContract(supaId) {
+    if(!confirm('Delete this contract?')) return;
+    showLoading('Deleting…');
+    await SDB.delete('contracts',supaId);
+    STATE.contracts=await SDB.getAll('contracts');
+    hideLoading(); Admin.renderContracts();
     showToast('Contract deleted.','success');
   },
 
-  uploadScope() { showToast('File upload — connect to server/storage to enable.'); },
+  renderAllAlerts() { const el=$('allAlertsPanel'); const alerts=Admin.getAlerts(); el.innerHTML=alerts.length?alerts.map(a=>`<div class="alert-item ${a.level}"><div class="alert-icon">${a.icon}</div><div class="alert-text"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div></div>`).join(''):'<div class="simple-notice">No active alerts ✓</div>'; },
 
-  renderAllAlerts() {
-    const alerts = Admin.getAlerts();
-    const el = $('allAlertsPanel');
-    if (!alerts.length) { el.innerHTML='<div class="simple-notice">No active alerts ✓</div>'; return; }
-    el.innerHTML = alerts.map(a=>`
-      <div class="alert-item ${a.level}">
-        <div class="alert-icon">${a.icon}</div>
-        <div class="alert-text"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div>
-      </div>`).join('');
-  },
+  uploadScope() { showToast('File upload — connect Supabase Storage bucket to enable.'); },
 
   exportCSV() {
-    const pos = DB.get('pos')||[];
-    const div = $('exportDivision').value;
-    const year = $('exportYear').value;
-    const filtered = pos.filter(p=>(!div||(p.div===div||p.multiAcct?.includes(div)))&&(!year||p.fiscal===year));
-    const rows = [['PO#','Vendor','Division','Code','Starting','Balance','Fiscal','Account','Notes']];
+    const div=$('exportDivision').value, year=$('exportYear').value;
+    const filtered=STATE.pos.filter(p=>(!div||(p.div===div||p.multiAcct?.includes(div)))&&(!year||p.fiscal===year));
+    const rows=[['PO#','Vendor','Division','Code','Starting','Balance','Fiscal','Account','Notes']];
     filtered.forEach(p=>rows.push([p.poNum,p.vendor,p.div||'Multi',p.code,p.start,p.balance,p.fiscal,p.acct||p.multiAcct||'',p.notes||'']));
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const a=document.createElement('a'); a.href='data:text/csv,'+encodeURIComponent(csv); a.download='CG_Parking_POs.csv'; a.click();
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(csv);a.download='CG_Parking_POs.csv';a.click();
     showToast('CSV exported ✓','success');
   },
 
-  changePassword() {
-    const old = $('oldPass').value;
-    const pw = DB.get('adminPass')||'134522';
-    if (old!==pw) { $('passMsg').textContent='Incorrect current password.'; $('passMsg').style.color='var(--danger)'; return; }
-    const n=$('newPass').value; const c=$('confirmPass').value;
-    if (n!==c) { $('passMsg').textContent='New passwords do not match.'; $('passMsg').style.color='var(--danger)'; return; }
-    if (n.length<4) { $('passMsg').textContent='Password too short.'; $('passMsg').style.color='var(--danger)'; return; }
-    DB.set('adminPass',n);
-    $('passMsg').textContent='Password updated ✓'; $('passMsg').style.color='var(--success)';
+  pickBudgetFile() { const inp=document.createElement('input');inp.type='file';inp.accept='.xlsx,.csv';inp.onchange=e=>{const f=e.target.files[0];if(f){$('budgetFileLabel').textContent='✓ '+f.name;$('budgetFileZone').classList.add('has-file');$('importBudgetBtn').style.display='inline-flex';$('budgetImportResult').innerHTML=`<div class="info-box">File selected: <strong>${f.name}</strong>. Click "Import Budget" to process.</div>`;}};inp.click(); },
+  async confirmBudgetImport() { showToast('Budget import processed using pre-loaded FY26 data.','success'); $('budgetImportResult').innerHTML=`<div class="success-box">✓ ${STATE.budget.length} line items loaded.</div>`; Admin.renderBudgetOverview(); },
+  pickPOImportFile() { const inp=document.createElement('input');inp.type='file';inp.accept='.xlsx,.csv';inp.onchange=e=>{const f=e.target.files[0];if(f){$('poImportLabel').textContent='✓ '+f.name;$('poImportZone').classList.add('has-file');$('importPOBtn').style.display='inline-flex';}};inp.click(); },
+  async confirmPOImport() { showToast('POs imported using pre-loaded FY26 PO data.','success'); },
+  pickInvoicePDF() { const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';inp.onchange=e=>{const f=e.target.files[0];if(f){$('invPDFLabel').textContent='✓ '+f.name;$('invPDFZone').classList.add('has-file');}};inp.click(); },
+
+  async changePassword() {
+    const old=$('oldPass').value;
+    const storedPass=await SDB.getSetting('adminPass')||'admin';
+    if(old!==storedPass){$('passMsg').textContent='Incorrect current password.';$('passMsg').style.color='var(--danger)';return;}
+    const n=$('newPass').value,c=$('confirmPass').value;
+    if(n!==c){$('passMsg').textContent='Passwords do not match.';$('passMsg').style.color='var(--danger)';return;}
+    if(n.length<4){$('passMsg').textContent='Too short.';$('passMsg').style.color='var(--danger)';return;}
+    showLoading('Saving…');
+    await SDB.setSetting('adminPass',n);
+    hideLoading();
+    $('passMsg').textContent='Password updated ✓';$('passMsg').style.color='var(--success)';
     ['oldPass','newPass','confirmPass'].forEach(id=>$(id).value='');
   },
-
   saveThresholds() { showToast('Thresholds saved ✓','success'); },
-  pickInvoicePDF() {
-    const inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf';
-    inp.onchange=e=>{const f=e.target.files[0]; if(f){$('invPDFLabel').textContent='✓ '+f.name; $('invPDFZone').classList.add('has-file');}};
-    inp.click();
-  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
 // SUPERVISOR MODULE
 // ═══════════════════════════════════════════════════════════════════════
 const Supervisor = {
-  _quotePDF: null,
-
   init() {
-    const user = App.currentUser;
-    if (!user) return;
-    const div = user.div;
-    const cfg = DIV_CONFIG[div]||{};
-    $('supSidebarName').textContent = user.name||'Supervisor';
-    $('supSidebarDiv').textContent = cfg.label || div || '—';
-    $('supContext').textContent = `${cfg.label||div||''} · ${$('supYear').value||'FY26'}`;
-    if (cfg.photo) {
-      $('supDivPhotoImg').src = cfg.photo;
-    }
+    const user=App.currentUser; if(!user) return;
+    const div=user.div, cfg=DIV_CONFIG[div]||{};
+    $('supSidebarName').textContent=user.name||'Supervisor';
+    $('supSidebarDiv').textContent=cfg.label||div||'—';
+    $('supContext').textContent=`${cfg.label||div||''} · ${$('supYear').value||'FY26'}`;
+    if(cfg.photo) $('supDivPhotoImg').src=cfg.photo;
     Supervisor.renderDashboard();
     Supervisor.renderInvoiceApproval();
     Supervisor.populatePOSelects();
@@ -2555,396 +2591,200 @@ const Supervisor = {
   showPage(page) {
     document.querySelectorAll('#supervisorApp .page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('#supervisorApp .nav-item').forEach(n=>n.classList.remove('active'));
-    $(`sup-page-${page}`).classList.add('active');
+    $(`sup-page-${page}`)?.classList.add('active');
     document.querySelector(`#supervisorApp .nav-item[data-page="${page}"]`)?.classList.add('active');
-    $('supPageTitle').textContent = {
-      dashboard:'Dashboard',logPurchase:'Log a Purchase',invoiceApproval:'Invoice Approval',
-      contracts:'Contracts',scopes:'Scopes of Work',requestChange:'Request PO Change'
-    }[page]||page;
-    if (page==='contracts') Supervisor.renderContracts();
+    const titles={dashboard:'Dashboard',logPurchase:'Log a Purchase',invoiceApproval:'Invoice Approval',contracts:'Contracts',scopes:'Scopes of Work',requestChange:'Request PO Change'};
+    $('supPageTitle').textContent=titles[page]||page;
+    if(page==='contracts') Supervisor.renderContracts();
   },
 
-  contextChanged() {
-    $('supContext').textContent = `${DIV_CONFIG[App.currentUser?.div]?.label||App.currentUser?.div||''} · ${$('supYear').value}`;
-    Supervisor.renderDashboard();
-    Supervisor.populatePOSelects();
-  },
+  contextChanged() { $('supContext').textContent=`${DIV_CONFIG[App.currentUser?.div]?.label||App.currentUser?.div||''} · ${$('supYear').value}`; Supervisor.renderDashboard(); Supervisor.populatePOSelects(); },
 
   updateBadges() {
-    const invs = DB.get('invoices')||[];
-    const pending = invs.filter(i=>!i.approved&&i.requireApproval);
-    if (pending.length>0) { $('supApprovalBadge').textContent=pending.length; $('supApprovalBadge').style.display='inline'; }
+    const pending=STATE.invoices.filter(i=>!i.approved&&i.requireApproval).length;
+    $('supApprovalBadge').textContent=pending; $('supApprovalBadge').style.display=pending>0?'inline':'none';
   },
 
   renderDashboard() {
-    const user = App.currentUser;
-    const div = user?.div;
-    const year = $('supYear')?.value||'FY26';
+    const user=App.currentUser, div=user?.div, year=$('supYear')?.value||'FY26';
+    const crs=STATE.changeRequests.filter(c=>c.requestedBy===user?.name);
+    const delayedCRs=crs.filter(c=>c.poDelay);
+    const pendingInforCRs=crs.filter(c=>c.status==='approved'&&!c.inforDate);
+    let bannerHTML='';
+    if(delayedCRs.length) bannerHTML+=`<div class="danger-box" style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><span class="notif-pulse"></span><div>⚠️ <strong>PO Delay:</strong> ${delayedCRs.map(c=>`PO ${c.poNum}: ${c.delayReason||'pending'}`).join(' | ')}</div></div>`;
+    if(pendingInforCRs.length) bannerHTML+=`<div class="warning-box" style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><span class="notif-pulse" style="background:var(--warning)"></span><div>📋 <strong>Approved POs pending INFOR entry:</strong> ${pendingInforCRs.map(c=>`PO ${c.poNum}`).join(', ')}</div></div>`;
+    $('supNotifBanner').innerHTML=bannerHTML; $('supNotifBanner').style.display=bannerHTML?'block':'none';
 
-    // NOTIFICATION BANNER
-    const crs = DB.get('changeRequests')||[];
-    const myCRs = crs.filter(c=>c.requestedBy===user?.name);
-    const delayedCRs = myCRs.filter(c=>c.poDelay);
-    const pendingInforCRs = myCRs.filter(c=>c.status==='approved'&&!c.inforDate);
-    let bannerHTML = '';
-    if (delayedCRs.length) {
-      bannerHTML += `<div class="danger-box" style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <span class="notif-pulse"></span>
-        <div>⚠️ <strong>PO Delay Notice:</strong> ${delayedCRs.length} of your change request(s) have a PO delay. 
-        ${delayedCRs.map(c=>`PO ${c.poNum}: ${c.delayReason||'Delay reason pending'}`).join(' | ')}</div>
-      </div>`;
-    }
-    if (pendingInforCRs.length) {
-      bannerHTML += `<div class="warning-box" style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <span class="notif-pulse" style="background:var(--warning)"></span>
-        <div>📋 <strong>Approved POs pending INFOR entry:</strong> ${pendingInforCRs.map(c=>`PO ${c.poNum}`).join(', ')} — approved but not yet in system.</div>
-      </div>`;
-    }
-    $('supNotifBanner').innerHTML = bannerHTML;
-    $('supNotifBanner').style.display = bannerHTML ? 'block' : 'none';
-
-    // PO Cards for this division
-    const pos = (DB.get('pos')||[]).filter(p => {
-      if (year==='FY25' && p.fiscal!=='FY25') return false;
-      if (year!=='FY25' && p.fiscal==='FY25') return false;
-      if (!div) return true;
-      return p.div===div || (p.multiAcct&&p.multiAcct.includes(div));
+    const pos=STATE.pos.filter(p=>{
+      if(year==='FY25'&&p.fiscal!=='FY25') return false;
+      if(year!=='FY25'&&p.fiscal==='FY25') return false;
+      return !div||p.div===div||(p.multiAcct&&p.multiAcct.includes(div));
     });
-
-    $('supDivBadge').textContent = `${pos.length} POs`;
-    const cards = $('supPOCards');
-    if (!pos.length) {
-      cards.innerHTML='<div class="simple-notice">No active POs for your division in '+(year||'FY26')+'.</div>';
-    } else {
-      cards.innerHTML = pos.map(p => {
-        const pct = p.start ? Math.min(100,Math.round((1-p.balance/p.start)*100)) : 0;
-        const isFY25 = p.fiscal==='FY25';
-        return `<div class="po-card">
-          <div class="po-card-header">
-            <div>
-              <div class="po-card-id">PO ${p.poNum} ${tagHTML(p.code||'')} ${isFY25?'<span class="fy25-warn">FY25</span>':''}</div>
-              <div class="po-card-vendor">${p.vendor}</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-weight:700;font-size:18px;color:var(--success)">${fmt(p.balance)}</div>
-              <div style="font-size:11px;color:var(--text2)">of ${fmt(p.start)}</div>
-            </div>
-          </div>
-          ${!isFY25?budgetBar(p.start-p.balance,p.start):''}
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-            <div style="font-size:11px;color:var(--text2)">
-              ${p.acct?'Acct: '+p.acct:''} ${p.div?'· Div: '+p.div:''} ${p.type||''}
-            </div>
-            <div style="display:flex;gap:6px">
-              ${p.notes?`<button class="btn btn-secondary btn-xs" title="${p.notes}">Notes</button>`:''}
-              ${isFY25?'<span class="warning-box" style="font-size:10px;padding:3px 8px">Cannot roll — use FY26</span>':''}
-            </div>
-          </div>
-          ${p.multiAcct?`<div style="font-size:10px;color:var(--text2);margin-top:6px;border-top:1px solid var(--bg2);padding-top:6px">${p.multiAcct}</div>`:''}
-        </div>`;
-      }).join('');
-    }
-
-    // Budget Snapshot
-    if (div) {
-      const budget = divBudgetTotal(div);
-      const poCommit = divPOCommitment(div);
-      const remaining = budget - poCommit;
-      const snap = $('supBudgetSnapshot');
-      snap.innerHTML = `
-        <div class="exec-kpi-row">
-          <div class="exec-kpi"><div class="exec-kpi-label">Division Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div>
-          <div class="exec-kpi"><div class="exec-kpi-label">PO Commitment</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div>
-          <div class="exec-kpi"><div class="exec-kpi-label">Remaining</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div>
+    $('supDivBadge').textContent=`${pos.length} POs`;
+    $('supPOCards').innerHTML=pos.length?pos.map(p=>{
+      const isFY25=p.fiscal==='FY25';
+      return `<div class="po-card">
+        <div class="po-card-header">
+          <div><div class="po-card-id">PO ${p.poNum} ${tagHTML(p.code||'')} ${isFY25?'<span class="fy25-warn">FY25</span>':''}</div><div class="po-card-vendor">${p.vendor}</div></div>
+          <div style="text-align:right"><div style="font-weight:700;font-size:18px;color:var(--success)">${fmt(p.balance)}</div><div style="font-size:11px;color:var(--text2)">of ${fmt(p.start)}</div></div>
         </div>
-        <div style="margin-top:12px">${budgetBar(poCommit,budget)}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">${div} — ${DIV_CONFIG[div]?.name||div} · FY26 Operating Budget</div>
-      `;
+        ${!isFY25?budgetBar(p.start-p.balance,p.start):''}
+        <div style="font-size:11px;color:var(--text2);margin-top:8px">${p.acct?'Acct: '+p.acct:''} ${p.div?'· Div: '+p.div:''}</div>
+        ${isFY25?'<div class="warning-box" style="margin-top:8px;font-size:11px">Cannot roll — use FY26</div>':''}
+        ${p.multiAcct?`<div style="font-size:10px;color:var(--text2);margin-top:6px;border-top:1px solid var(--bg2);padding-top:6px">${p.multiAcct}</div>`:''}
+      </div>`;
+    }).join(''):'<div class="simple-notice">No active POs for your division.</div>';
+
+    if(div){
+      const budget=divBudgetTotal(div), poCommit=divPOCommitment(div), remaining=budget-poCommit;
+      $('supBudgetSnapshot').innerHTML=`<div class="exec-kpi-row"><div class="exec-kpi"><div class="exec-kpi-label">Division Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commitment</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Remaining</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}<div style="font-size:11px;color:var(--text3);margin-top:6px">${div} — ${DIV_CONFIG[div]?.name||div} · FY26</div>`;
     }
   },
 
   populatePOSelects() {
-    const div = App.currentUser?.div;
-    const pos = (DB.get('pos')||[]).filter(p => {
-      if (p.fiscal==='FY25') return false;
-      return !div || p.div===div || (p.multiAcct&&p.multiAcct.includes(div));
-    });
-    const opts = `<option value="">— Select PO —</option>${pos.map(p=>`<option value="${p.poNum}">${p.poNum} — ${p.vendor} [${fmt(p.balance)} left]</option>`).join('')}`;
-    $('logPOSelect').innerHTML = opts;
-    $('crPOSelect').innerHTML = opts;
+    const div=App.currentUser?.div;
+    const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&(!div||p.div===div||(p.multiAcct&&p.multiAcct.includes(div))));
+    const opts=`<option value="">— Select PO —</option>${pos.map(p=>`<option value="${p._id||p.poNum}">${p.poNum} — ${p.vendor} [${fmt(p.balance)} left]</option>`).join('')}`;
+    $('logPOSelect').innerHTML=opts; $('crPOSelect').innerHTML=opts;
   },
 
   logPOSelected() {
-    const poNum = $('logPOSelect').value;
-    const po = (DB.get('pos')||[]).find(p=>p.poNum===poNum);
-    if (!po) { $('logPOInfo').style.display='none'; $('logVendor').value=''; return; }
-    $('logVendor').value = po.vendor;
-    $('logPOInfo').innerHTML = `<strong>${po.vendor}</strong> · Balance: ${fmt(po.balance)} of ${fmt(po.start)} · ${po.type||po.code}`;
-    $('logPOInfo').style.display = 'block';
+    const val=$('logPOSelect').value;
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    if(!po){$('logPOInfo').style.display='none';$('logVendor').value='';return;}
+    $('logVendor').value=po.vendor;
+    $('logPOInfo').innerHTML=`<strong>${po.vendor}</strong> · Balance: ${fmt(po.balance)} of ${fmt(po.start)} · ${po.type||po.code}`;
+    $('logPOInfo').style.display='block';
   },
 
   checkBlanket() {
-    const poNum = $('logPOSelect').value;
-    const po = (DB.get('pos')||[]).find(p=>p.poNum===poNum);
-    const amt = parseFloat($('logAmount').value)||0;
-    const limited = po && ['PBK2','SPO2'].includes(po.code);
-    const warn = $('logBlanketWarn');
-    warn.style.display = limited && amt>1000 ? 'block' : 'none';
-    $('logSubmitBtn').disabled = limited && amt>1000;
+    const val=$('logPOSelect').value;
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    const amt=parseFloat($('logAmount').value)||0;
+    const lim=po&&['PBK2','SPO2'].includes(po.code);
+    $('logBlanketWarn').style.display=lim&&amt>1000?'block':'none';
+    $('logSubmitBtn').disabled=!!(lim&&amt>1000);
   },
 
-  submitOrder() {
-    const poNum = $('logPOSelect').value;
-    const amt = parseFloat($('logAmount').value)||0;
-    const date = $('logDate').value;
-    const desc = $('logDescription').value.trim();
-    if (!poNum||!amt||!date||!desc) { showToast('All fields required.','error'); return; }
-    const po = (DB.get('pos')||[]).find(p=>p.poNum===poNum);
-    DB.push('pendingOrders', {
-      id:Date.now().toString(),
-      date, poNum, vendor:po?.vendor||'', amount:amt, description:desc,
-      requestedBy:App.currentUser?.name, div:App.currentUser?.div, status:'pending'
-    });
+  async submitOrder() {
+    const val=$('logPOSelect').value, amt=parseFloat($('logAmount').value)||0;
+    const date=$('logDate').value, desc=$('logDescription').value.trim();
+    if(!val||!amt||!date||!desc){showToast('All fields required.','error');return;}
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    showLoading('Submitting…');
+    await SDB.insert('pending_orders',{date,poNum:po?.poNum||val,vendor:po?.vendor||'',amount:amt,description:desc,requestedBy:App.currentUser?.name,div:App.currentUser?.div,status:'pending'});
+    STATE.pendingOrders=await SDB.getAll('pending_orders');
+    hideLoading();
     ['logPOSelect','logAmount','logDate','logDescription'].forEach(id=>$(id).value='');
     $('logPOInfo').style.display='none'; $('logVendor').value='';
-    showToast('Purchase logged ✓ Admin has been notified.','success');
+    showToast('Purchase logged ✓','success');
     Admin.updateBadges?.();
   },
 
   renderInvoiceApproval() {
-    const invs = (DB.get('invoices')||[]).filter(i=>i.requireApproval&&!i.approved);
-    const el = $('supInvoiceApprovalList');
-    if (!el) return;
-    if (!invs.length) { el.innerHTML='<div class="simple-notice">No invoices pending approval ✓</div>'; return; }
-    el.innerHTML = invs.map(i=>`
-      <div class="po-card">
-        <div class="po-card-header">
-          <div>
-            <div class="po-card-id">Invoice ${i.invNumber}</div>
-            <div class="po-card-vendor">${i.invVendor} · PO ${i.poNum} · ${i.invDate}</div>
-          </div>
-          <div style="font-size:20px;font-weight:700;color:var(--coral)">${fmt(i.invAmount)}</div>
-        </div>
-        ${i.invNotes?`<div style="font-size:12px;color:var(--text2);margin:8px 0">${i.invNotes}</div>`:''}
-        <button class="btn btn-success btn-sm" onclick="App.showApproveInv('${i.id}','Invoice ${i.invNumber} for ${fmt(i.invAmount)} from ${i.invVendor}')">✅ Approve</button>
-      </div>`).join('');
-    $('supApprovalBadge').textContent = invs.length;
-    $('supApprovalBadge').style.display = invs.length>0 ? 'inline' : 'none';
+    const invs=STATE.invoices.filter(i=>i.requireApproval&&!i.approved);
+    const el=$('supInvoiceApprovalList'); if(!el) return;
+    el.innerHTML=invs.length?invs.map(i=>`<div class="po-card">
+      <div class="po-card-header"><div><div class="po-card-id">Invoice ${i.invNumber}</div><div class="po-card-vendor">${i.invVendor} · PO ${i.poNum} · ${i.invDate}</div></div><div style="font-size:20px;font-weight:700;color:var(--coral)">${fmt(i.invAmount)}</div></div>
+      ${i.invNotes?`<div style="font-size:12px;color:var(--text2);margin:8px 0">${i.invNotes}</div>`:''}
+      <button class="btn btn-success btn-sm" onclick="App.showApproveInv('${i._id}','Invoice ${i.invNumber} for ${fmt(i.invAmount)} from ${i.invVendor}')">✅ Approve</button>
+    </div>`).join(''):'<div class="simple-notice">No invoices pending approval ✓</div>';
+    Supervisor.updateBadges();
   },
 
   renderContracts() {
-    const div = App.currentUser?.div;
-    const contracts = (DB.get('contracts')||[]).filter(c=>!div||c.ctDivision===div);
-    const el = $('supContractsList');
-    if (!el) return;
-    if (!contracts.length) { el.innerHTML='<div class="simple-notice">No contracts for your division.</div>'; return; }
-    el.innerHTML = contracts.map(c=>{
-      const days = daysUntil(c.ctExpDate);
-      return `<div class="po-card">
-        <div class="po-card-header">
-          <div>
-            <div class="po-card-id">${c.ctNumber} · ${c.ctVendor}</div>
-            <div class="po-card-vendor">${c.ctType==='city'?'City Contract':'Piggyback'} · ${c.ctDivision||'—'}</div>
-          </div>
-          <span class="tag ${days<0?'tag-red':days<30?'tag-red':days<60?'tag-orange':'tag-green'}">${days>0?days+'d left':'Expired'}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text2)">Expires: ${c.ctExpDate} · Plan: ${c.ctFuturePlan||'—'}</div>
-        ${c.ctNotes?`<div style="font-size:11px;color:var(--text3);margin-top:6px">${c.ctNotes}</div>`:''}
-      </div>`;
-    }).join('');
+    const div=App.currentUser?.div;
+    const contracts=STATE.contracts.filter(c=>!div||c.ctDivision===div);
+    const el=$('supContractsList'); if(!el) return;
+    el.innerHTML=contracts.length?contracts.map(c=>{const days=daysUntil(c.ctExpDate);return `<div class="po-card"><div class="po-card-header"><div><div class="po-card-id">${c.ctNumber} · ${c.ctVendor}</div><div class="po-card-vendor">${c.ctType==='city'?'City Contract':'Piggyback'}</div></div><span class="tag ${days<0?'tag-red':days<30?'tag-red':days<60?'tag-orange':'tag-green'}">${days>0?days+'d left':'Expired'}</span></div><div style="font-size:12px;color:var(--text2)">Expires: ${c.ctExpDate} · Plan: ${c.ctFuturePlan||'—'}</div></div>`;}).join(''):'<div class="simple-notice">No contracts for your division.</div>';
   },
 
   pickQuotePDF() {
-    const inp=document.createElement('input'); inp.type='file'; inp.accept='application/pdf';
-    inp.onchange=e=>{
-      const f=e.target.files[0]; if(!f) return;
-      Supervisor._quotePDF=f;
-      $('crQuoteLabel').textContent='✓ '+f.name;
-      $('crQuoteZone').classList.add('has-file');
-      $('crSubmitBtn').disabled=false;
-      $('crSubmitBtn').textContent='Submit Request';
-    };
+    const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';
+    inp.onchange=e=>{const f=e.target.files[0];if(!f) return; Supervisor._quotePDF=f; $('crQuoteLabel').textContent='✓ '+f.name; $('crQuoteZone').classList.add('has-file'); $('crSubmitBtn').disabled=false; $('crSubmitBtn').textContent='Submit Request';};
     inp.click();
   },
 
-  submitChangeRequest() {
-    const poNum = $('crPOSelect').value;
-    const reason = $('crReason').value;
-    const details = $('crDetails').value;
-    if (!poNum||!reason||!details) { showToast('All fields required.','error'); return; }
-    const po = (DB.get('pos')||[]).find(p=>p.poNum===poNum);
-    DB.push('changeRequests', {
-      id:Date.now().toString(),
-      date:today(), poNum, vendor:po?.vendor||'', reason, details,
-      requestedBy:App.currentUser?.name, status:'pending',
-      inforDate:null, poDelay:false,
-    });
+  async submitChangeRequest() {
+    const val=$('crPOSelect').value, reason=$('crReason').value, details=$('crDetails').value;
+    if(!val||!reason||!details){showToast('All fields required.','error');return;}
+    const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    showLoading('Submitting…');
+    await SDB.insert('change_requests',{date:today(),poNum:po?.poNum||val,vendor:po?.vendor||'',reason,details,requestedBy:App.currentUser?.name,status:'pending',inforDate:null,poDelay:false});
+    STATE.changeRequests=await SDB.getAll('change_requests');
+    hideLoading();
     ['crPOSelect','crReason','crDetails'].forEach(id=>$(id).value='');
     $('crQuoteLabel').textContent='📎 Click to attach new quote PDF';
-    $('crQuoteZone').classList.remove('has-file');
-    $('crSubmitBtn').disabled=true; Supervisor._quotePDF=null;
+    $('crQuoteZone').classList.remove('has-file'); $('crSubmitBtn').disabled=true; Supervisor._quotePDF=null;
     showToast('Change request submitted ✓','success');
     Admin.updateBadges?.();
   },
 
-  uploadScope() { showToast('Scope upload — connect to server/storage to enable.'); },
+  uploadScope() { showToast('Scope upload — connect Supabase Storage to enable.'); },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
 // EXECUTIVE MODULE
 // ═══════════════════════════════════════════════════════════════════════
 const Executive = {
-  currentPerson: 'overview',
-
   init() {
-    // Build tabs
-    const tabs = $('execPersonTabs');
-    tabs.innerHTML = EXEC_CONFIG.map(p=>`
-      <div class="exec-tab ${p.id==='overview'?'active':''}" onclick="Executive.selectPerson('${p.id}')" id="exec-tab-${p.id}">
-        <img src="${p.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">
-        ${p.name}
-      </div>`).join('');
+    const tabs=$('execPersonTabs');
+    tabs.innerHTML=EXEC_CONFIG.map(p=>`<div class="exec-tab ${p.id==='overview'?'active':''}" onclick="Executive.selectPerson('${p.id}')" id="exec-tab-${p.id}">
+      <img src="${p.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'"> ${p.name}
+    </div>`).join('');
     Executive.render('overview');
   },
 
   selectPerson(id) {
-    Executive.currentPerson = id;
     document.querySelectorAll('.exec-tab').forEach(t=>t.classList.remove('active'));
     $(`exec-tab-${id}`)?.classList.add('active');
     Executive.render(id);
   },
 
   render(id) {
-    const cfg = EXEC_CONFIG.find(p=>p.id===id)||EXEC_CONFIG[0];
-    const content = $('execContent');
-
-    if (id==='overview') {
-      // Overview: division cards sorted numerically, no budget numbers
-      const divs = Object.entries(DIV_CONFIG).sort((a,b)=>a[0].localeCompare(b[0]));
-      content.innerHTML = `
-        <div class="stats-grid" style="margin-bottom:24px">
-          <div class="stat-card info"><div class="stat-label">Total Divisions</div><div class="stat-value">${divs.length}</div></div>
-          <div class="stat-card"><div class="stat-label">Active POs (FY26)</div><div class="stat-value">${(DB.get('pos')||[]).filter(p=>p.fiscal!=='FY25').length}</div></div>
-          <div class="stat-card warning"><div class="stat-label">FY25 Legacy POs</div><div class="stat-value">${(DB.get('pos')||[]).filter(p=>p.fiscal==='FY25').length}</div></div>
-          <div class="stat-card danger"><div class="stat-label">Expiring Contracts</div><div class="stat-value">${(DB.get('contracts')||[]).filter(c=>daysUntil(c.ctExpDate)<60).length}</div></div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px">
-          ${divs.map(([divCode,divCfg])=>{
-            const pos = (DB.get('pos')||[]).filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
-            return `<div class="exec-div-card">
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-                <img src="${divCfg.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
-                <div>
-                  <div style="font-weight:700;font-size:14px">${divCfg.label}</div>
-                  <div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div>
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>`;
+    const cfg=EXEC_CONFIG.find(p=>p.id===id)||EXEC_CONFIG[0];
+    const content=$('execContent');
+    if(id==='overview'){
+      const divs=Object.entries(DIV_CONFIG).sort((a,b)=>a[0].localeCompare(b[0]));
+      content.innerHTML=`<div class="stats-grid" style="margin-bottom:24px">
+        <div class="stat-card info"><div class="stat-label">Total Divisions</div><div class="stat-value">${divs.length}</div></div>
+        <div class="stat-card"><div class="stat-label">Active POs (FY26)</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal!=='FY25').length}</div></div>
+        <div class="stat-card warning"><div class="stat-label">FY25 Legacy POs</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal==='FY25').length}</div></div>
+        <div class="stat-card danger"><div class="stat-label">Expiring Contracts</div><div class="stat-value">${STATE.contracts.filter(c=>daysUntil(c.ctExpDate)<60).length}</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+        ${divs.map(([divCode,divCfg])=>{const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));return `<div class="exec-div-card"><div style="display:flex;align-items:center;gap:10px"><img src="${divCfg.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'"><div><div style="font-weight:700">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div></div></div></div>`;}).join('')}
+      </div>`;
       return;
     }
-
-    // Person view
-    const divCodes = cfg.divs;
-    const showBudget = cfg.showBudget;
-    const notes = cfg.notes||{};
-
-    let html = ``;
-
-    // For Matt: show special Block by Block note
-    if (id==='anderson' && cfg.blockByBlock) {
-      html += `<div class="block-by-block-note">
-        📍 <strong>Block by Block (8200 - 3401):</strong> On Street meter maintenance & collection contract. 
-        Current balance: <strong>${fmt((DB.get('pos')||[]).filter(p=>(p.div==='8200'&&p.acct==='3401')).reduce((s,p)=>s+p.balance,0))}</strong>
-      </div>`;
-    }
-
-    // Stats row
-    if (showBudget) {
-      const totalBudget = divCodes.reduce((s,d)=>s+divBudgetTotal(d),0);
-      const totalPO = divCodes.reduce((s,d)=>s+divPOCommitment(d),0);
-      const totalRemaining = totalBudget - totalPO;
-      html += `<div class="stats-grid" style="margin-bottom:20px">
-        <div class="stat-card info"><div class="stat-label">Total Operating Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">FY26</div></div>
+    const divCodes=cfg.divs, notes=cfg.notes||{};
+    let html='';
+    if(id==='anderson'&&cfg.blockByBlock){html+=`<div class="block-by-block-note">📍 <strong>Block by Block (8200 - 3401):</strong> On Street meter maintenance & collection. Balance: <strong>${fmt(STATE.pos.filter(p=>p.div==='8200'&&p.acct==='3401').reduce((s,p)=>s+p.balance,0))}</strong></div>`;}
+    if(cfg.showBudget){
+      const totalBudget=divCodes.reduce((s,d)=>s+divBudgetTotal(d),0);
+      const totalPO=divCodes.reduce((s,d)=>s+divPOCommitment(d),0);
+      const totalRem=totalBudget-totalPO;
+      html+=`<div class="stats-grid" style="margin-bottom:20px">
+        <div class="stat-card info"><div class="stat-label">Total Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">FY26</div></div>
         <div class="stat-card warning"><div class="stat-label">PO Commitments</div><div class="stat-value">${fmtK(totalPO)}</div></div>
-        <div class="stat-card ${totalRemaining<0?'danger':'success'}"><div class="stat-label">Remaining</div><div class="stat-value">${fmtK(totalRemaining)}</div></div>
-        <div class="stat-card"><div class="stat-label">Active POs</div><div class="stat-value">${(DB.get('pos')||[]).filter(p=>p.fiscal!=='FY25'&&divCodes.some(d=>p.div===d||(p.multiAcct&&p.multiAcct.includes(d)))).length}</div></div>
+        <div class="stat-card ${totalRem<0?'danger':'success'}"><div class="stat-label">Remaining</div><div class="stat-value">${fmtK(totalRem)}</div></div>
+        <div class="stat-card"><div class="stat-label">Active POs</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal!=='FY25'&&divCodes.some(d=>p.div===d||(p.multiAcct&&p.multiAcct.includes(d)))).length}</div></div>
       </div>`;
     }
-
-    // Division cards
-    html += divCodes.map(divCode => {
-      const divCfg = DIV_CONFIG[divCode]||{name:divCode,photo:''};
-      const budget = divBudgetTotal(divCode);
-      const poCommit = divPOCommitment(divCode);
-      const remaining = budget - poCommit;
-      const pos = (DB.get('pos')||[]).filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
-
-      let cardHTML = `<div class="exec-div-card">
-        <div class="exec-div-header">
-          <div style="display:flex;align-items:center;gap:12px">
-            <img src="${divCfg.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover" onerror="this.style.display='none'">
-            <div>
-              <div class="exec-div-name">${divCfg.label}</div>
-              <div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div>
-            </div>
-          </div>
-        </div>`;
-
-      if (showBudget) {
-        cardHTML += `<div class="exec-kpi-row" style="margin-bottom:12px">
-          <div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div>
-          <div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div>
-          <div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div>
-        </div>
-        ${budgetBar(poCommit,budget)}`;
+    html+=divCodes.map(divCode=>{
+      const divCfg=DIV_CONFIG[divCode]||{name:divCode,photo:''};
+      const budget=divBudgetTotal(divCode), poCommit=divPOCommitment(divCode), remaining=budget-poCommit;
+      const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
+      let card=`<div class="exec-div-card"><div class="exec-div-header"><div style="display:flex;align-items:center;gap:12px"><img src="${divCfg.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover" onerror="this.style.display='none'"><div><div class="exec-div-name">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div></div></div></div>`;
+      if(cfg.showBudget) card+=`<div class="exec-kpi-row" style="margin-bottom:12px"><div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}`;
+      if(id==='anderson'&&cfg.showDetailBudget){
+        const acctRows=getBudgetForDiv(divCode);
+        if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>Balance</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const used=pos.filter(p=>p.acct===b.acct).reduce((s,p)=>s+(p.start-p.balance),0);const bal=b.amt-used;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="5" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
       }
-
-      // For Matt: show account detail tab
-      if (id==='anderson' && cfg.showDetailBudget) {
-        const acctRows = getBudgetForDiv(divCode);
-        if (acctRows.length) {
-          cardHTML += `<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px">
-            <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div>
-            <div class="table-wrap"><table>
-              <thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>Balance</th><th></th></tr></thead>
-              <tbody>${acctRows.map(b=>{
-                const acctPOs = pos.filter(p=>p.acct===b.acct);
-                const used = acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);
-                const bal = b.amt-used;
-                const noteKey = `${divCode}-${b.acct}`;
-                return `<tr>
-                  <td><strong>${b.acct}</strong></td>
-                  <td>${b.desc}</td>
-                  <td>${fmt(b.amt)}</td>
-                  <td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td>
-                  <td>${notes[noteKey]?`<span title="${notes[noteKey]}" style="cursor:help">ℹ️</span>`:''}</td>
-                </tr>
-                ${notes[noteKey]?`<tr><td colspan="5" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[noteKey]}</td></tr>`:''}`;
-              }).join('')}</tbody>
-            </table></div>
-          </div>`;
-        }
-      }
-
-      // PO summary
-      if (pos.length) {
-        cardHTML += `<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px">
-          <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs</div>
-          ${pos.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)">
-            <span>${p.poNum} · ${p.vendor.length>22?p.vendor.slice(0,22)+'…':p.vendor} ${tagHTML(p.code||'')}</span>
-            <span style="color:var(--success);font-weight:600">${fmt(p.balance)}</span>
-          </div>`).join('')}
-          ${pos.length>4?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${pos.length-4} more POs…</div>`:''}
-        </div>`;
-      }
-
-      cardHTML += '</div>';
-      return cardHTML;
+      if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs</div>${pos.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)"><span>${p.poNum} · ${p.vendor.length>22?p.vendor.slice(0,22)+'…':p.vendor} ${tagHTML(p.code||'')}</span><span style="color:var(--success);font-weight:600">${fmt(p.balance)}</span></div>`).join('')}${pos.length>4?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${pos.length-4} more…</div>`:''}</div>`;
+      return card+'</div>';
     }).join('');
-
-    content.innerHTML = html;
+    content.innerHTML=html;
   },
 };
 
@@ -2953,5 +2793,4 @@ const Executive = {
 // ═══════════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
-</body>
-</html>
+</body></html>
