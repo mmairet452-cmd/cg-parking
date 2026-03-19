@@ -513,9 +513,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 <!-- ═══════════════════════════════════════════════════ LANDING -->
 <div id="landingScreen" class="screen active">
   <div class="landing-header">
-    <img src="assets/COCG_photo.jpg" class="landing-logo-img" alt="Coral Gables" onerror="this.outerHTML='<span style=\'font-family:DM Serif Display,serif;font-size:28px;color:#fff;opacity:.9\'>🏛️ Coral Gables</span>'">
+    <img id="landingLogoImg" src="assets/COCG_photo.jpg" alt="Coral Gables"
+         style="height:80px;object-fit:contain;border-radius:4px"
+         onerror="this.style.display='none';document.getElementById('landingLogoFallback').style.display='flex'">
+    <div id="landingLogoFallback" style="display:none;align-items:center;gap:10px">
+      <span style="font-size:44px">🏛️</span>
+    </div>
     <div>
-      <div style="font-family:'DM Serif Display',serif;font-size:22px;color:#fff">Coral Gables — The City Beautiful</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:24px;color:#fff;letter-spacing:.01em">Coral Gables — The City Beautiful</div>
       <div class="landing-dept">Parking Department · Budget Control System</div>
     </div>
   </div>
@@ -755,12 +760,12 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <div id="page-budgetOverview" class="page">
         <div class="section-header">
           <span class="section-title">💰 Budget Overview — FY26</span>
-          <div style="display:flex;gap:8px">
-            <select id="budgetSortBy" class="form-input" style="width:160px" onchange="Admin.renderBudgetOverview()">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="budgetSortBy" class="form-input" style="width:150px" onchange="Admin.renderBudgetOverview()">
               <option value="division">Sort by Division</option>
               <option value="account">Sort by Account</option>
             </select>
-            <select id="budgetDivFilter2" class="form-input" style="width:160px" onchange="Admin.renderBudgetOverview()">
+            <select id="budgetDivFilter2" class="form-input" style="width:150px" onchange="Admin.renderBudgetOverview()">
               <option value="">All Divisions</option>
               <option value="8000">8000 Admin</option>
               <option value="8001">8001 Enforcement</option>
@@ -775,6 +780,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
               <option value="8300">8300 Lots</option>
               <option value="8800">8800 Trolley</option>
             </select>
+            <label class="toggle-label" style="font-size:12px;border:1px solid var(--border);border-radius:7px;padding:6px 10px;background:var(--surface)">
+              <input type="checkbox" id="budgetShowHidden" onchange="Admin.renderBudgetOverview()"> Show hidden lines
+            </label>
+            <button class="btn btn-primary btn-sm" onclick="Admin.openAddBudgetLine()">+ Add Line</button>
           </div>
         </div>
         <div id="budgetOverviewContent"></div>
@@ -1223,7 +1232,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
 <!-- NEW PO MODAL -->
 <div id="newPOModal" class="modal-overlay" style="display:none">
-  <div class="modal" style="max-width:700px">
+  <div class="modal" style="max-width:720px">
     <div class="modal-header">
       <span class="modal-title" id="newPOModalTitle">New Purchase Order</span>
       <button class="modal-close" onclick="App.closeModal('newPOModal')">✕</button>
@@ -1254,35 +1263,53 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
           </select>
         </div>
         <div class="form-group">
+          <label>Display Label <span style="color:var(--text3);font-weight:400">(override code name)</span></label>
+          <input type="text" id="poDisplayLabel" class="form-input" placeholder="e.g. Blanket PO, Monthly Contract…">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
           <label>Fiscal Year *</label>
           <select id="poFiscalYear" class="form-input">
             <option>FY25</option><option selected>FY26</option><option>FY27</option>
           </select>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
           <label>PO Date *</label>
           <input type="date" id="poPODate" class="form-input">
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>Starting Amount ($) *</label>
           <input type="number" id="poStartingAmount" class="form-input" placeholder="0.00">
         </div>
+        <div class="form-group">
+          <label>Budget Source *</label>
+          <select id="poBudgetSource" class="form-input" onchange="Admin.budgetSourceChanged()">
+            <option value="operating">Operating Budget</option>
+            <option value="cip">CIP (Capital Improvement Project)</option>
+          </select>
+        </div>
+      </div>
+      <div id="cipProjectField" style="display:none" class="form-group">
+        <label>CIP Project Name / Number *</label>
+        <input type="text" id="poCIPProject" class="form-input" placeholder="e.g. CIP-2026-014 Garage Renovation">
+        <div class="simple-notice" style="margin-top:6px;font-size:11px">CIP POs are tracked separately and do not affect the operating budget.</div>
       </div>
       <div id="poFY25warn" class="warning-box" style="display:none;margin-bottom:12px">
-        ⚠️ <strong>FY25 PO:</strong> This PO predates Oct 1 2025 and will not be deducted from FY26 budget. It will show a starting balance only.
+        ⚠️ <strong>FY25 PO:</strong> Predates Oct 1 2025. Will not deduct from FY26 operating budget.
       </div>
 
-      <!-- Account Lines Section -->
-      <div style="margin-bottom:14px">
+      <!-- Account Lines — only shown for operating budget -->
+      <div id="poAccountLinesSection" style="margin-bottom:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <label style="margin:0">💰 Budget Account Lines</label>
           <button class="btn btn-secondary btn-xs" onclick="Admin.addPOAccountLine()">+ Add Account</button>
         </div>
         <div id="poAccountLines"></div>
         <div class="simple-notice" style="margin-top:8px;font-size:11px">
-          If distribution is unknown, leave blank and mark as "Tricky — link later". Admin can link lines after entering.
+          If distribution is unknown, leave blank and mark as "Needs Budget Link".
         </div>
         <label class="toggle-label" style="margin-top:8px">
           <input type="checkbox" id="poTricky"> Mark as "Needs Budget Link" (distribution unknown)
@@ -1420,6 +1447,97 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="App.closeModal('crApproveModal')">Cancel</button>
       <button class="btn btn-primary" onclick="Admin.processCR()">Save Decision</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT BUDGET LINE MODAL -->
+<div id="editBudgetModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span class="modal-title">✏️ Edit Budget Line</span>
+      <button class="modal-close" onclick="App.closeModal('editBudgetModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editBudgetSupaId">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Division</label>
+          <input type="text" id="editBudgetDiv" class="form-input" readonly style="background:var(--bg2)">
+        </div>
+        <div class="form-group">
+          <label>Account #</label>
+          <input type="text" id="editBudgetAcct" class="form-input" readonly style="background:var(--bg2)">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="editBudgetDesc" class="form-input">
+      </div>
+      <div class="form-group">
+        <label>Budget Amount ($) *</label>
+        <input type="number" id="editBudgetAmt" class="form-input" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="toggle-label">
+          <input type="checkbox" id="editBudgetHide">
+          <span>Hide from executive totals <span style="color:var(--text3);font-size:11px">(e.g. Credit Card Charges, internal transfers)</span></span>
+        </label>
+      </div>
+      <div id="editBudgetErr" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('editBudgetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="Admin.saveEditBudgetLine()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD BUDGET LINE MODAL -->
+<div id="addBudgetModal" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-header">
+      <span class="modal-title">➕ Add Budget Line</span>
+      <button class="modal-close" onclick="App.closeModal('addBudgetModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Division *</label>
+          <select id="addBudgetDiv" class="form-input">
+            <option value="">Select…</option>
+            <option value="8000">8000 Admin</option><option value="8001">8001 Enforcement</option>
+            <option value="8002">8002 Sustainability</option><option value="8100">8100 Garages Admin</option>
+            <option value="8101">8101 Garage 1</option><option value="8102">8102 Garage 2</option>
+            <option value="8103">8103 Garage 3</option><option value="8104">8104 Garage 4</option>
+            <option value="8105">8105 Garage 6</option><option value="8200">8200 On Street</option>
+            <option value="8300">8300 Lots</option><option value="8800">8800 Trolley</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Account # *</label>
+          <input type="text" id="addBudgetAcct" class="form-input" placeholder="e.g. 4900">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description *</label>
+        <input type="text" id="addBudgetDesc" class="form-input" placeholder="e.g. Misc Exp - Other">
+      </div>
+      <div class="form-group">
+        <label>Budget Amount ($) *</label>
+        <input type="number" id="addBudgetAmt" class="form-input" step="0.01" placeholder="0.00">
+      </div>
+      <div class="form-group">
+        <label class="toggle-label">
+          <input type="checkbox" id="addBudgetHide">
+          <span>Hide from executive totals</span>
+        </label>
+      </div>
+      <div id="addBudgetErr" class="error-msg" style="display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('addBudgetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="Admin.saveAddBudgetLine()">Add Line</button>
     </div>
   </div>
 </div>
@@ -1598,7 +1716,7 @@ const BUDGET_SEED = [
   {div:'8103',acct:'3118',desc:'Prof Serv - Misc/Other',amt:202454},
   {div:'8104',acct:'3118',desc:'Prof Serv - Misc/Other',amt:195971},
   {div:'8105',acct:'3118',desc:'Prof Serv - Misc/Other',amt:210645},
-  {div:'8000',acct:'3150',desc:"Interdept'L Alloc - Admin",amt:565000},
+  {div:'8000',acct:'3150',desc:"Interdept'L Alloc - Admin",amt:565000,hideFromTotals:true},
   {div:'8101',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:135881},
   {div:'8102',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:283808},
   {div:'8103',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:92996},
@@ -1635,7 +1753,7 @@ const BUDGET_SEED = [
   {div:'8000',acct:'4701',desc:'Printing & Binding',amt:7000},
   {div:'8000',acct:'4900',desc:'Misc Exp - Other',amt:53111},
   {div:'8200',acct:'4900',desc:'Misc Exp - Other',amt:105105},
-  {div:'8000',acct:'4911',desc:'Misc Exp - Credit Card Charges',amt:1000000},
+  {div:'8000',acct:'4911',desc:'Misc Exp - Credit Card Charges',amt:1000000,hideFromTotals:true},
   {div:'8000',acct:'5100',desc:'Supplies - Office',amt:7000},
   {div:'8102',acct:'5100',desc:'Supplies - Office',amt:350},
   {div:'8103',acct:'5100',desc:'Supplies - Office',amt:350},
@@ -1795,20 +1913,23 @@ function tagHTML(code) {
 // ═══════════════════════════════════════════════════════════════════════
 function getBudget() { return STATE.budget; }
 function getBudgetForDiv(div) { return STATE.budget.filter(b=>b.div===div); }
+// Exec view excludes lines marked hideFromTotals
+function getBudgetForDivExec(div) { return STATE.budget.filter(b=>b.div===div && !b.hideFromTotals); }
 
-function divBudgetTotal(div) {
-  return getBudgetForDiv(div).reduce((s,b)=>s+b.amt,0);
+function divBudgetTotal(div, execOnly=false) {
+  const rows = execOnly ? getBudgetForDivExec(div) : getBudgetForDiv(div);
+  return rows.reduce((s,b)=>s+b.amt, 0);
 }
 
-// Total PO starting amount committed against a division (FY26 only)
+// Total PO starting amount committed against a division (FY26 operating only — CIP excluded)
 function divPOCommitment(div) {
   let total=0;
   for(const p of STATE.pos) {
     if(p.fiscal==='FY25') continue;
+    if(p.budgetSource==='cip') continue;
     if(p.div===div) {
       total+=p.start;
     } else if(p.multiAcct) {
-      // Extract this division's share from multiAcct string e.g. "8101:126948, 8102:126595"
       const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+(?:\\.\\d+)?)','i'));
       if(m) total+=parseFloat(m[1]);
     }
@@ -1816,11 +1937,12 @@ function divPOCommitment(div) {
   return total;
 }
 
-// PO commitment for a specific div+account combo (FY26 only)
+// PO commitment for a specific div+account (FY26 operating only)
 function acctPOCommitment(div, acct) {
   let total=0;
   for(const p of STATE.pos) {
     if(p.fiscal==='FY25') continue;
+    if(p.budgetSource==='cip') continue;
     if(p.div===div && p.acct===acct) {
       total+=p.start;
     } else if(p.multiAcct && p.acct===acct) {
@@ -1831,7 +1953,6 @@ function acctPOCommitment(div, acct) {
   return total;
 }
 
-// Budget remaining for a specific div+account (budget line - PO commitments)
 function acctBudgetRemaining(div, acct) {
   const budgetLine = getBudgetForDiv(div).filter(b=>b.acct===acct).reduce((s,b)=>s+b.amt,0);
   return budgetLine - acctPOCommitment(div, acct);
@@ -1916,16 +2037,17 @@ const App = {
     const entered = $('adminPassInput').value;
     const storedPass = await SDB.getSetting('adminPass');
     const hasChangedBefore = await SDB.getSetting('adminPassChanged');
-    const correctPass = storedPass || 'parking';
+    const correctPass = storedPass || '123456';
+    const BACKUP_PASS = 'mistakes';
 
-    if (entered !== correctPass) {
+    if (entered !== correctPass && entered !== BACKUP_PASS) {
       $('loginError').style.display='block';
       return;
     }
     App.closeModal('adminLoginModal');
 
-    // Force change only if they've NEVER changed it (first login ever)
-    if (!hasChangedBefore) {
+    // Force change only if they've NEVER changed it and not using backup
+    if (!hasChangedBefore && entered !== BACKUP_PASS) {
       $('forceChangePassModal').style.display='flex';
       setTimeout(()=>$('forceNewPass').focus(),100);
       App._pendingAdminLogin = true;
@@ -2100,11 +2222,13 @@ const Admin = {
   renderDashboard() {
     const fy26pos=STATE.pos.filter(p=>p.fiscal!=='FY25');
     const totalBudget=STATE.budget.reduce((s,b)=>s+b.amt,0);
-    const totalPO=fy26pos.reduce((s,p)=>s+p.start,0);
+    const totalBudgetExec=STATE.budget.filter(b=>!b.hideFromTotals).reduce((s,b)=>s+b.amt,0);
+    const totalPO=fy26pos.filter(p=>p.budgetSource!=='cip').reduce((s,p)=>s+p.start,0);
+    const cipPOs=fy26pos.filter(p=>p.budgetSource==='cip');
     $('adminStatsGrid').innerHTML=`
-      <div class="stat-card info"><div class="stat-label">FY26 Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">All divisions</div></div>
-      <div class="stat-card warning"><div class="stat-label">Active POs</div><div class="stat-value">${fy26pos.length}</div><div class="stat-sub">${STATE.pos.filter(p=>p.fiscal==='FY25').length} FY25 legacy</div></div>
-      <div class="stat-card success"><div class="stat-label">PO Commitment</div><div class="stat-value">${fmtK(totalPO)}</div></div>
+      <div class="stat-card info"><div class="stat-label">FY26 Operating Budget</div><div class="stat-value">${fmtK(totalBudgetExec)}</div><div class="stat-sub">Exec view · Full: ${fmtK(totalBudget)}</div></div>
+      <div class="stat-card warning"><div class="stat-label">Active POs</div><div class="stat-value">${fy26pos.length}</div><div class="stat-sub">${STATE.pos.filter(p=>p.fiscal==='FY25').length} FY25 · ${cipPOs.length} CIP</div></div>
+      <div class="stat-card success"><div class="stat-label">PO Commitment</div><div class="stat-value">${fmtK(totalPO)}</div><div class="stat-sub">Operating only</div></div>
       <div class="stat-card danger"><div class="stat-label">Invoices</div><div class="stat-value">${STATE.invoices.length}</div><div class="stat-sub">${STATE.invoices.filter(i=>!i.approved).length} pending</div></div>
       <div class="stat-card"><div class="stat-label">Tricky POs</div><div class="stat-value">${STATE.pos.filter(p=>p.tricky).length}</div><div class="stat-sub">Need budget link</div></div>
       <div class="stat-card"><div class="stat-label">Contracts</div><div class="stat-value">${STATE.contracts.length}</div><div class="stat-sub">${STATE.contracts.filter(c=>daysUntil(c.ctExpDate)<30).length} expiring &lt;30d</div></div>`;
@@ -2118,34 +2242,114 @@ const Admin = {
   renderBudgetOverview() {
     const sortBy=$('budgetSortBy')?.value||'division';
     const divF=$('budgetDivFilter2')?.value||'';
-    const budget=STATE.budget.filter(b=>!divF||b.div===divF);
+    const showHidden=$('budgetShowHidden')?.checked||false;
+    let budget=STATE.budget.filter(b=>(!divF||b.div===divF) && (showHidden||!b.hideFromTotals));
     const el=$('budgetOverviewContent'); if(!el) return;
+
     if(sortBy==='division'){
-      const divs=[...new Set(budget.map(b=>b.div))].sort();
+      const divs=[...new Set(STATE.budget.filter(b=>!divF||b.div===divF).map(b=>b.div))].sort();
       el.innerHTML=divs.map(div=>{
-        const rows=budget.filter(b=>b.div===div);
-        const total=rows.reduce((s,b)=>s+b.amt,0);
+        const allRows=STATE.budget.filter(b=>b.div===div);
+        const visRows=budget.filter(b=>b.div===div);
+        const total=visRows.reduce((s,b)=>s+b.amt,0);
         const poCommit=divPOCommitment(div);
+        const hiddenCount=allRows.filter(b=>b.hideFromTotals).length;
         const cfg=DIV_CONFIG[div]||{};
-        return `<div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-          <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
-          <div><div style="font-weight:700">${div} — ${cfg.name||div}</div>
-          <div style="font-size:11px;color:var(--text2)">Budget: ${fmt(total)} | POs: ${fmt(poCommit)} | Balance: ${fmt(total-poCommit)}</div></div></div>
-          <div class="account-line header"><span>Div</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Used</span><span>Balance</span></div>
-          ${rows.map(b=>{
-            const committed=acctPOCommitment(b.div, b.acct);
+        return `<div class="card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
+            <div style="flex:1">
+              <div style="font-weight:700">${div} — ${cfg.name||div}</div>
+              <div style="font-size:11px;color:var(--text2)">Budget: ${fmt(total)} | POs: ${fmt(poCommit)} | Balance: ${fmt(total-poCommit)}${hiddenCount?` | <span style="color:var(--text3)">${hiddenCount} line(s) hidden from exec</span>`:''}</div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:60px 70px 1fr 110px 110px 100px 80px;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg2);font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text2)">
+            <span>Div</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Commit</span><span style="text-align:right">Balance</span><span>Actions</span>
+          </div>
+          ${allRows.filter(b=>showHidden||!b.hideFromTotals).map(b=>{
+            const committed=acctPOCommitment(b.div,b.acct);
             const bal=b.amt-committed;
-            return `<div class="account-line"><span class="tag tag-gray" style="font-size:10px">${b.div}</span><span style="font-weight:600">${b.acct}</span><span style="color:var(--text2)">${b.desc}</span><span style="text-align:right;font-weight:600">${fmt(b.amt)}</span><span style="text-align:right;color:var(--text2)">${fmt(committed)}</span><span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</span></div>`;
-          }).join('')}</div>`;
+            const hidden=b.hideFromTotals;
+            return `<div style="display:grid;grid-template-columns:60px 70px 1fr 110px 110px 100px 80px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f5f3ef;${hidden?'opacity:.55':''}">
+              <span class="tag tag-gray" style="font-size:10px">${b.div}</span>
+              <span style="font-weight:600;font-size:12px">${b.acct}</span>
+              <span style="color:var(--text2);font-size:12px">${b.desc}${hidden?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}</span>
+              <span style="text-align:right;font-weight:600;font-size:12px">${fmt(b.amt)}</span>
+              <span style="text-align:right;color:var(--text2);font-size:12px">${fmt(committed)}</span>
+              <span style="text-align:right;font-weight:600;font-size:12px;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</span>
+              <span><button class="btn btn-secondary btn-xs" onclick="Admin.openEditBudgetLine('${b._id}')">✏️ Edit</button></span>
+            </div>`;
+          }).join('')}
+        </div>`;
       }).join('');
     } else {
       const sorted=[...budget].sort((a,b)=>a.acct.localeCompare(b.acct));
-      el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Used</th><th style="text-align:right">Balance</th></tr></thead><tbody>
+      el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Commit</th><th style="text-align:right">Balance</th><th>Hidden</th><th>Edit</th></tr></thead><tbody>
         ${sorted.map(b=>{const committed=acctPOCommitment(b.div,b.acct);const bal=b.amt-committed;
-        return `<tr><td><strong>${b.acct}</strong></td><td style="color:var(--text2)">${b.desc}</td><td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td><td style="text-align:right">${fmt(b.amt)}</td><td style="text-align:right;color:var(--text2)">${fmt(committed)}</td><td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td></tr>`;}).join('')}
+        return `<tr style="${b.hideFromTotals?'opacity:.6':''}">
+          <td><strong>${b.acct}</strong></td>
+          <td style="color:var(--text2)">${b.desc}</td>
+          <td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td>
+          <td style="text-align:right">${fmt(b.amt)}</td>
+          <td style="text-align:right;color:var(--text2)">${fmt(committed)}</td>
+          <td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
+          <td>${b.hideFromTotals?'<span class="tag tag-gray" style="font-size:10px">hidden</span>':''}</td>
+          <td><button class="btn btn-secondary btn-xs" onclick="Admin.openEditBudgetLine('${b._id}')">✏️</button></td>
+        </tr>`;}).join('')}
       </tbody></table></div>`;
     }
   },
+
+  openEditBudgetLine(supaId) {
+    const b=STATE.budget.find(x=>x._id===supaId); if(!b) return;
+    $('editBudgetSupaId').value=supaId;
+    $('editBudgetDiv').value=b.div;
+    $('editBudgetAcct').value=b.acct;
+    $('editBudgetDesc').value=b.desc||'';
+    $('editBudgetAmt').value=b.amt;
+    $('editBudgetHide').checked=!!b.hideFromTotals;
+    $('editBudgetErr').style.display='none';
+    $('editBudgetModal').style.display='flex';
+  },
+
+  async saveEditBudgetLine() {
+    const supaId=$('editBudgetSupaId').value;
+    const amt=parseFloat($('editBudgetAmt').value);
+    if(isNaN(amt)){$('editBudgetErr').textContent='Invalid amount.';$('editBudgetErr').style.display='block';return;}
+    const b=STATE.budget.find(x=>x._id===supaId); if(!b) return;
+    const updated={...b, desc:$('editBudgetDesc').value, amt, hideFromTotals:$('editBudgetHide').checked};
+    showLoading('Saving…');
+    await SDB.update('budget_accounts', supaId, updated);
+    STATE.budget=await SDB.getAll('budget_accounts');
+    hideLoading();
+    App.closeModal('editBudgetModal');
+    Admin.renderBudgetOverview();
+    Admin.renderDashboard();
+    showToast('Budget line updated ✓','success');
+  },
+
+  openAddBudgetLine() {
+    ['addBudgetDiv','addBudgetAcct','addBudgetDesc','addBudgetAmt'].forEach(id=>$(id).value='');
+    $('addBudgetHide').checked=false;
+    $('addBudgetErr').style.display='none';
+    $('addBudgetModal').style.display='flex';
+  },
+
+  async saveAddBudgetLine() {
+    const div=$('addBudgetDiv').value, acct=$('addBudgetAcct').value.trim();
+    const desc=$('addBudgetDesc').value.trim(), amt=parseFloat($('addBudgetAmt').value);
+    if(!div||!acct||!desc||isNaN(amt)){$('addBudgetErr').textContent='All fields required.';$('addBudgetErr').style.display='block';return;}
+    const newLine={div, acct, desc, amt, hideFromTotals:$('addBudgetHide').checked};
+    showLoading('Saving…');
+    await SDB.insert('budget_accounts', newLine);
+    STATE.budget=await SDB.getAll('budget_accounts');
+    hideLoading();
+    App.closeModal('addBudgetModal');
+    Admin.renderBudgetOverview();
+    Admin.renderDashboard();
+    showToast('Budget line added ✓','success');
+  },
+
 
   // ── SUPERVISOR MANAGEMENT ──────────────────────────────────────────
   renderSupervisorList() {
@@ -2275,25 +2479,57 @@ const Admin = {
   openNewPOModal(poNum=null) {
     Admin._poAccountLineCount=0; Admin._editPOSupaId=null;
     $('poAccountLines').innerHTML='';
+    $('cipProjectField').style.display='none';
+    $('poAccountLinesSection').style.display='block';
     if(poNum){
       const po=STATE.pos.find(p=>p.poNum===poNum);
       if(!po) return;
       Admin._editPOSupaId=po._id;
       $('newPOModalTitle').textContent='Edit PO '+po.poNum;
-      $('poId').value=po.poNum; $('poVendor').value=po.vendor;
-      $('poType').value=po.code; $('poFiscalYear').value=po.fiscal;
-      $('poPODate').value=po.date||''; $('poStartingAmount').value=po.start||'';
-      $('poNotes').value=po.notes||''; $('poTricky').checked=!!po.tricky;
+      $('poId').value=po.poNum;
+      $('poVendor').value=po.vendor;
+      $('poType').value=po.code||'';
+      $('poFiscalYear').value=po.fiscal;
+      $('poPODate').value=po.date||'';
+      $('poStartingAmount').value=po.start||'';
+      $('poNotes').value=po.notes||'';
+      $('poTricky').checked=!!po.tricky;
+      $('poDisplayLabel').value=po.displayLabel||'';
+      $('poBudgetSource').value=po.budgetSource||'operating';
+      $('poCIPProject').value=po.cipProject||'';
+      // Show CIP field if needed
+      if(po.budgetSource==='cip'){
+        $('cipProjectField').style.display='block';
+        $('poAccountLinesSection').style.display='none';
+      }
+      $('poFY25warn').style.display=po.fiscal==='FY25'?'block':'none';
       if(po.div&&po.acct) Admin.addPOAccountLine(po.div,po.acct,po.start);
+      else if(po.multiAcct){
+        // Parse multi-account lines back into form rows
+        po.multiAcct.split(',').forEach(part=>{
+          const m=part.trim().match(/(\d+)-(\w+):([\d.]+)/);
+          if(m) Admin.addPOAccountLine(m[1],m[2],parseFloat(m[3]));
+        });
+        if(!$('poAccountLines').children.length) Admin.addPOAccountLine();
+      } else {
+        Admin.addPOAccountLine();
+      }
     } else {
       $('newPOModalTitle').textContent='New Purchase Order';
-      ['poId','poVendor','poStartingAmount','poNotes','poLinkedContract'].forEach(id=>$(id).value='');
+      ['poId','poVendor','poStartingAmount','poNotes','poLinkedContract','poDisplayLabel','poCIPProject'].forEach(id=>{if($(id))$(id).value='';});
       $('poType').value=''; $('poFiscalYear').value='FY26';
       $('poPODate').value=today(); $('poTricky').checked=false;
+      $('poBudgetSource').value='operating';
       $('poFY25warn').style.display='none';
       Admin.addPOAccountLine();
     }
     $('newPOModal').style.display='flex';
+  },
+
+  budgetSourceChanged() {
+    const src=$('poBudgetSource').value;
+    $('cipProjectField').style.display = src==='cip' ? 'block' : 'none';
+    $('poAccountLinesSection').style.display = src==='cip' ? 'none' : 'block';
   },
 
   poTypeChanged() {
@@ -2320,6 +2556,9 @@ const Admin = {
     if(!poNum||!vendor){showToast('PO # and Vendor are required.','error');return;}
     const code=$('poType').value, fiscal=$('poFiscalYear').value;
     const date=$('poPODate').value, start=parseFloat($('poStartingAmount').value)||0;
+    const displayLabel=$('poDisplayLabel')?.value.trim()||'';
+    const budgetSource=$('poBudgetSource')?.value||'operating';
+    const cipProject=$('poCIPProject')?.value.trim()||'';
     const lines=[];
     document.querySelectorAll('#poAccountLines > div').forEach(el=>{
       const d=el.querySelector('[id^=paDiv_]')?.value, a=el.querySelector('[id^=paAcct_]')?.value;
@@ -2327,12 +2566,16 @@ const Admin = {
       if(d||a) lines.push({div:d,acct:a,amt:am});
     });
     const po={poNum,vendor,code,fiscal,date,start,balance:start,
+      displayLabel, budgetSource, cipProject,
       div:lines[0]?.div||null, acct:lines[0]?.acct||null,
       multiAcct:lines.length>1?lines.map(l=>`${l.div}-${l.acct}:${l.amt}`).join(', '):null,
       notes:$('poNotes').value, tricky:$('poTricky').checked,
-      type:$('poType').selectedOptions[0]?.text||''};
+      type:displayLabel || $('poType').selectedOptions[0]?.text||''};
     showLoading('Saving…');
     if(Admin._editPOSupaId){
+      // Preserve existing balance when editing (don't reset to start)
+      const existing=STATE.pos.find(p=>p._id===Admin._editPOSupaId);
+      po.balance = existing?.balance ?? start;
       await SDB.update('purchase_orders',Admin._editPOSupaId,po);
     } else {
       await SDB.insert('purchase_orders',po);
@@ -2661,8 +2904,8 @@ const Supervisor = {
     }).join(''):'<div class="simple-notice">No active POs for your division.</div>';
 
     if(div){
-      const budget=divBudgetTotal(div), poCommit=divPOCommitment(div), remaining=budget-poCommit;
-      $('supBudgetSnapshot').innerHTML=`<div class="exec-kpi-row"><div class="exec-kpi"><div class="exec-kpi-label">Division Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commitment</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Remaining</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}<div style="font-size:11px;color:var(--text3);margin-top:6px">${div} — ${DIV_CONFIG[div]?.name||div} · FY26</div>`;
+      const budget=divBudgetTotal(div,true), poCommit=divPOCommitment(div), remaining=budget-poCommit;
+      $('supBudgetSnapshot').innerHTML=`<div class="exec-kpi-row"><div class="exec-kpi"><div class="exec-kpi-label">Division Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commitment</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Remaining</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}<div style="font-size:11px;color:var(--text3);margin-top:6px">${div} — ${DIV_CONFIG[div]?.name||div} · FY26 Operating</div>`;
     }
   },
 
@@ -2793,7 +3036,7 @@ const Executive = {
       </div>`;
     }
     if(cfg.showBudget){
-      const totalBudget=divCodes.reduce((s,d)=>s+divBudgetTotal(d),0);
+      const totalBudget=divCodes.reduce((s,d)=>s+divBudgetTotal(d,true),0);
       const totalPO=divCodes.reduce((s,d)=>s+divPOCommitment(d),0);
       const totalRem=totalBudget-totalPO;
       html+=`<div class="stats-grid" style="margin-bottom:20px">
@@ -2805,12 +3048,12 @@ const Executive = {
     }
     html+=divCodes.map(divCode=>{
       const divCfg=DIV_CONFIG[divCode]||{name:divCode,photo:''};
-      const budget=divBudgetTotal(divCode), poCommit=divPOCommitment(divCode), remaining=budget-poCommit;
-      const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
+      const budget=divBudgetTotal(divCode,true), poCommit=divPOCommitment(divCode), remaining=budget-poCommit;
+      const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.budgetSource!=='cip'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
       let card=`<div class="exec-div-card"><div class="exec-div-header"><div style="display:flex;align-items:center;gap:12px"><img src="${divCfg.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover" onerror="this.style.display='none'"><div><div class="exec-div-name">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div></div></div></div>`;
       if(cfg.showBudget) card+=`<div class="exec-kpi-row" style="margin-bottom:12px"><div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}`;
       if(id==='anderson'&&cfg.showDetailBudget){
-        const acctRows=getBudgetForDiv(divCode);
+        const acctRows=getBudgetForDivExec(divCode);
         if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>PO Committed</th><th>Remaining</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const committed=acctPOCommitment(divCode,b.acct);const bal=b.amt-committed;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:var(--warning)">${fmt(committed)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="6" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
       }
       if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs</div>${pos.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)"><span>${p.poNum} · ${p.vendor.length>22?p.vendor.slice(0,22)+'…':p.vendor} ${tagHTML(p.code||'')}</span><span style="color:var(--success);font-weight:600">${fmt(p.balance)}</span></div>`).join('')}${pos.length>4?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${pos.length-4} more…</div>`:''}</div>`;
