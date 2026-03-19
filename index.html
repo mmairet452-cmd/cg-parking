@@ -563,7 +563,6 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       </div>
       <div id="loginError" class="error-msg" style="display:none">Incorrect password.</div>
       <button class="btn btn-primary w-full" onclick="App.submitAdminLogin()" style="margin-top:8px">Sign In</button>
-      <p style="text-align:center;font-size:11px;color:var(--text3);margin-top:10px">Default: 134522</p>
     </div>
   </div>
 </div>
@@ -1474,7 +1473,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <span class="modal-title">🔒 Set Your Admin Password</span>
     </div>
     <div class="modal-body">
-      <div class="warning-box" style="margin-bottom:16px">First login detected. You must set a new password before continuing.</div>
+      <div class="warning-box" style="margin-bottom:16px">Welcome! Please set your personal admin password. You'll only be asked to do this once.</div>
       <div class="form-group"><label>New Password *</label><input type="password" id="forceNewPass" class="form-input" placeholder="Min 6 characters"></div>
       <div class="form-group"><label>Confirm Password *</label><input type="password" id="forceConfirmPass" class="form-input"></div>
       <div id="forcePassErr" class="error-msg" style="display:none"></div>
@@ -1800,17 +1799,42 @@ function getBudgetForDiv(div) { return STATE.budget.filter(b=>b.div===div); }
 function divBudgetTotal(div) {
   return getBudgetForDiv(div).reduce((s,b)=>s+b.amt,0);
 }
+
+// Total PO starting amount committed against a division (FY26 only)
 function divPOCommitment(div) {
   let total=0;
   for(const p of STATE.pos) {
     if(p.fiscal==='FY25') continue;
-    if(p.div===div) total+=p.start;
-    else if(p.multiAcct) {
-      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+)','i'));
+    if(p.div===div) {
+      total+=p.start;
+    } else if(p.multiAcct) {
+      // Extract this division's share from multiAcct string e.g. "8101:126948, 8102:126595"
+      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+(?:\\.\\d+)?)','i'));
       if(m) total+=parseFloat(m[1]);
     }
   }
   return total;
+}
+
+// PO commitment for a specific div+account combo (FY26 only)
+function acctPOCommitment(div, acct) {
+  let total=0;
+  for(const p of STATE.pos) {
+    if(p.fiscal==='FY25') continue;
+    if(p.div===div && p.acct===acct) {
+      total+=p.start;
+    } else if(p.multiAcct && p.acct===acct) {
+      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+(?:\\.\\d+)?)','i'));
+      if(m) total+=parseFloat(m[1]);
+    }
+  }
+  return total;
+}
+
+// Budget remaining for a specific div+account (budget line - PO commitments)
+function acctBudgetRemaining(div, acct) {
+  const budgetLine = getBudgetForDiv(div).filter(b=>b.acct===acct).reduce((s,b)=>s+b.amt,0);
+  return budgetLine - acctPOCommitment(div, acct);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1891,8 +1915,8 @@ const App = {
   async submitAdminLogin() {
     const entered = $('adminPassInput').value;
     const storedPass = await SDB.getSetting('adminPass');
-    const isFirstLogin = !storedPass; // no password set yet = first login
-    const correctPass = storedPass || 'admin'; // default is 'admin'
+    const hasChangedBefore = await SDB.getSetting('adminPassChanged');
+    const correctPass = storedPass || 'parking';
 
     if (entered !== correctPass) {
       $('loginError').style.display='block';
@@ -1900,8 +1924,8 @@ const App = {
     }
     App.closeModal('adminLoginModal');
 
-    if (isFirstLogin) {
-      // Force password change on first login
+    // Force change only if they've NEVER changed it (first login ever)
+    if (!hasChangedBefore) {
       $('forceChangePassModal').style.display='flex';
       setTimeout(()=>$('forceNewPass').focus(),100);
       App._pendingAdminLogin = true;
@@ -1917,6 +1941,7 @@ const App = {
     if (np !== cp) { $('forcePassErr').textContent='Passwords do not match.'; $('forcePassErr').style.display='block'; return; }
     showLoading('Saving password…');
     await SDB.setSetting('adminPass', np);
+    await SDB.setSetting('adminPassChanged', true); // mark as changed — never prompt again
     hideLoading();
     App.closeModal('forceChangePassModal');
     App._pendingAdminLogin = false;
@@ -2108,17 +2133,16 @@ const Admin = {
           <div style="font-size:11px;color:var(--text2)">Budget: ${fmt(total)} | POs: ${fmt(poCommit)} | Balance: ${fmt(total-poCommit)}</div></div></div>
           <div class="account-line header"><span>Div</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Used</span><span>Balance</span></div>
           ${rows.map(b=>{
-            const acctPOs=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.acct===b.acct&&p.div===b.div);
-            const used=acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);
-            const bal=b.amt-used;
-            return `<div class="account-line"><span class="tag tag-gray" style="font-size:10px">${b.div}</span><span style="font-weight:600">${b.acct}</span><span style="color:var(--text2)">${b.desc}</span><span style="text-align:right;font-weight:600">${fmt(b.amt)}</span><span style="text-align:right;color:var(--text2)">${fmt(used)}</span><span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</span></div>`;
+            const committed=acctPOCommitment(b.div, b.acct);
+            const bal=b.amt-committed;
+            return `<div class="account-line"><span class="tag tag-gray" style="font-size:10px">${b.div}</span><span style="font-weight:600">${b.acct}</span><span style="color:var(--text2)">${b.desc}</span><span style="text-align:right;font-weight:600">${fmt(b.amt)}</span><span style="text-align:right;color:var(--text2)">${fmt(committed)}</span><span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</span></div>`;
           }).join('')}</div>`;
       }).join('');
     } else {
       const sorted=[...budget].sort((a,b)=>a.acct.localeCompare(b.acct));
       el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Used</th><th style="text-align:right">Balance</th></tr></thead><tbody>
-        ${sorted.map(b=>{const acctPOs=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.acct===b.acct&&p.div===b.div);const used=acctPOs.reduce((s,p)=>s+(p.start-p.balance),0);const bal=b.amt-used;
-        return `<tr><td><strong>${b.acct}</strong></td><td style="color:var(--text2)">${b.desc}</td><td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td><td style="text-align:right">${fmt(b.amt)}</td><td style="text-align:right;color:var(--text2)">${fmt(used)}</td><td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td></tr>`;}).join('')}
+        ${sorted.map(b=>{const committed=acctPOCommitment(b.div,b.acct);const bal=b.amt-committed;
+        return `<tr><td><strong>${b.acct}</strong></td><td style="color:var(--text2)">${b.desc}</td><td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td><td style="text-align:right">${fmt(b.amt)}</td><td style="text-align:right;color:var(--text2)">${fmt(committed)}</td><td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td></tr>`;}).join('')}
       </tbody></table></div>`;
     }
   },
@@ -2564,6 +2588,7 @@ const Admin = {
     if(n.length<4){$('passMsg').textContent='Too short.';$('passMsg').style.color='var(--danger)';return;}
     showLoading('Saving…');
     await SDB.setSetting('adminPass',n);
+    await SDB.setSetting('adminPassChanged', true);
     hideLoading();
     $('passMsg').textContent='Password updated ✓';$('passMsg').style.color='var(--success)';
     ['oldPass','newPass','confirmPass'].forEach(id=>$(id).value='');
@@ -2759,7 +2784,14 @@ const Executive = {
     }
     const divCodes=cfg.divs, notes=cfg.notes||{};
     let html='';
-    if(id==='anderson'&&cfg.blockByBlock){html+=`<div class="block-by-block-note">📍 <strong>Block by Block (8200 - 3401):</strong> On Street meter maintenance & collection. Balance: <strong>${fmt(STATE.pos.filter(p=>p.div==='8200'&&p.acct==='3401').reduce((s,p)=>s+p.balance,0))}</strong></div>`;}
+    if(id==='anderson'&&cfg.blockByBlock){
+      const bbBudget = getBudgetForDiv('8200').filter(b=>b.acct==='3401').reduce((s,b)=>s+b.amt,0);
+      const bbCommit = acctPOCommitment('8200','3401');
+      const bbRemain = bbBudget - bbCommit;
+      html+=`<div class="block-by-block-note">📍 <strong>Block by Block (8200 - 3401):</strong> On Street meter maintenance &amp; collection.<br>
+        <span style="font-size:12px;color:var(--text2)">Budget: <strong>${fmt(bbBudget)}</strong> &nbsp;|&nbsp; PO Commitments: <strong style="color:var(--warning)">${fmt(bbCommit)}</strong> &nbsp;|&nbsp; Remaining Budget: <strong style="color:${bbRemain<0?'var(--danger)':'var(--success)'}">${fmt(bbRemain)}</strong></span>
+      </div>`;
+    }
     if(cfg.showBudget){
       const totalBudget=divCodes.reduce((s,d)=>s+divBudgetTotal(d),0);
       const totalPO=divCodes.reduce((s,d)=>s+divPOCommitment(d),0);
@@ -2779,7 +2811,7 @@ const Executive = {
       if(cfg.showBudget) card+=`<div class="exec-kpi-row" style="margin-bottom:12px"><div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}`;
       if(id==='anderson'&&cfg.showDetailBudget){
         const acctRows=getBudgetForDiv(divCode);
-        if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>Balance</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const used=pos.filter(p=>p.acct===b.acct).reduce((s,p)=>s+(p.start-p.balance),0);const bal=b.amt-used;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="5" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
+        if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>PO Committed</th><th>Remaining</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const committed=acctPOCommitment(divCode,b.acct);const bal=b.amt-committed;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:var(--warning)">${fmt(committed)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="6" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
       }
       if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs</div>${pos.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)"><span>${p.poNum} · ${p.vendor.length>22?p.vendor.slice(0,22)+'…':p.vendor} ${tagHTML(p.code||'')}</span><span style="color:var(--success);font-weight:600">${fmt(p.balance)}</span></div>`).join('')}${pos.length>4?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${pos.length-4} more…</div>`:''}</div>`;
       return card+'</div>';
