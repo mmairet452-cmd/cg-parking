@@ -744,6 +744,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <!-- DASHBOARD -->
       <div id="page-dashboard" class="page active">
         <div class="stats-grid" id="adminStatsGrid"></div>
+        <!-- BUDGET SNAPSHOT — inline editable -->
+        <div style="margin-bottom:20px">
+          <div class="section-header">
+            <span class="section-title">💰 Budget Snapshot — Operating</span>
+            <span style="font-size:11px;color:var(--text2)">Click ✏️ Edit to modify any line · Hidden lines shown faded</span>
+          </div>
+          <div id="adminBudgetSnapshot" class="table-wrap"></div>
+        </div>
         <div class="two-col">
           <div>
             <div class="section-header"><span class="section-title">⚠️ Active Alerts</span></div>
@@ -1716,14 +1724,13 @@ const BUDGET_SEED = [
   {div:'8103',acct:'3118',desc:'Prof Serv - Misc/Other',amt:202454},
   {div:'8104',acct:'3118',desc:'Prof Serv - Misc/Other',amt:195971},
   {div:'8105',acct:'3118',desc:'Prof Serv - Misc/Other',amt:210645},
-  {div:'8000',acct:'3150',desc:"Interdept'L Alloc - Admin",amt:565000,hideFromTotals:true},
-  {div:'8101',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:135881},
-  {div:'8102',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:283808},
-  {div:'8103',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:92996},
-  {div:'8104',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:165755},
-  {div:'8105',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:216831},
-  {div:'8200',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:1866195},
-  {div:'8300',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:836968},
+  {div:'8000',acct:'3150',desc:"Interdept'L Alloc - Admin",amt:565000,hideFromTotals:true},  {div:'8101',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:135881,hideFromTotals:true},
+  {div:'8102',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:283808,hideFromTotals:true},
+  {div:'8103',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:92996,hideFromTotals:true},
+  {div:'8104',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:165755,hideFromTotals:true},
+  {div:'8105',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:216831,hideFromTotals:true},
+  {div:'8200',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:1866195,hideFromTotals:true},
+  {div:'8300',acct:'3160',desc:"Intradept'L Alloc - Admin",amt:836968,hideFromTotals:true},
   {div:'8200',acct:'3401',desc:"Custodial - Enh'd Street Clng",amt:550000},
   {div:'8000',acct:'4010',desc:'Automobile Allowance',amt:10395},
   {div:'8200',acct:'4100',desc:'Telecom Services',amt:160000},
@@ -1745,7 +1752,7 @@ const BUDGET_SEED = [
   {div:'8104',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:19590},
   {div:'8105',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:29111},
   {div:'8200',acct:'4611',desc:'Repair/Maint - Oper Equip',amt:1625},
-  {div:'1608',acct:'4612',desc:'Repair/Maint - Comm Garages',amt:700000},
+  {div:'1608',acct:'4612',desc:'Repair/Maint - Comm Garages',amt:700000,hideFromTotals:true},
   {div:'8101',acct:'4700',desc:'Special Printed Forms',amt:250},
   {div:'8102',acct:'4700',desc:'Special Printed Forms',amt:250},
   {div:'8104',acct:'4700',desc:'Special Printed Forms',amt:500},
@@ -1816,7 +1823,7 @@ const PO_SEED = [
   {poNum:'15786',date:'2026-02-26',vendor:'Bytewise Solutions, Inc',start:5692.5,balance:5692.5,code:'SPO1',type:'Quote Specific',fiscal:'FY26',div:'8200',acct:'4900',multiAcct:null,notes:'',tricky:false},
   {poNum:'15667',date:'2026-01-16',vendor:'Printing Depot',start:926.5,balance:926.5,code:'CNT1',type:'Contract Monthly',fiscal:'FY26',div:'8000',acct:'4701',multiAcct:null,notes:'',tricky:false},
   {poNum:'15655',date:'2026-01-15',vendor:'ReadyRefresh',start:300,balance:259.59,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:'8200',acct:'4900',multiAcct:null,notes:'As needed',tricky:false},
-  {poNum:'15641',date:'2026-01-12',vendor:'Flowbird America Inc',start:291550,balance:17325,code:'PBK1',type:'Blanket PO',fiscal:'FY26',div:'8200',acct:'6405',multiAcct:null,notes:'',tricky:false},
+  {poNum:'15641',date:'2026-01-12',vendor:'Flowbird America Inc',start:291550,balance:17325,code:'PBK1',type:'Blanket PO',fiscal:'FY26',div:'8200',acct:'6405',multiAcct:null,notes:'Capital account 6405 — CIP',budgetSource:'cip',cipProject:'CIP-8200-6405 Flowbird Equipment',tricky:false},
   {poNum:'15496',date:'2025-12-02',vendor:'LAZ Florida Parking, LLC',start:850000,balance:587279.01,code:'CNT2',type:'Contract Variable',fiscal:'FY26',div:null,acct:'3118',multiAcct:'8101:126948, 8102:126595, 8103:110860, 8104:106479, 8105:116397',notes:'Monthly per garage',tricky:false},
   {poNum:'15466',date:'2025-11-25',vendor:'FPI Security Services',start:192000,balance:114775.04,code:'CNT2',type:'Contract Variable',fiscal:'FY26',div:null,acct:'3118',multiAcct:'8101:22955, 8102:22955, 8103:22955, 8104:22955, 8105:22955',notes:'Monthly',tricky:false},
   {poNum:'15420',date:'2025-11-13',vendor:'Galls, LLC',start:10900,balance:10900,code:'PBK2',type:'Blanket PO',fiscal:'FY26',div:null,acct:null,multiAcct:null,notes:'Tricky — link lines when distribution available',tricky:true},
@@ -2237,6 +2244,49 @@ const Admin = {
     $('adminAlertsPanel').innerHTML=alerts.length?alerts.slice(0,6).map(a=>`<div class="alert-item ${a.level}"><div class="alert-icon">${a.icon}</div><div class="alert-text"><div class="alert-title">${a.title}</div><div class="alert-sub">${a.sub}</div></div></div>`).join(''):'<div class="simple-notice">No active alerts ✓</div>';
     const recent=[...STATE.invoices].reverse().slice(0,5);
     $('recentActivityPanel').innerHTML=recent.length?`<div class="table-wrap"><table><thead><tr><th>Invoice</th><th>PO</th><th>Amount</th><th>Date</th></tr></thead><tbody>${recent.map(i=>`<tr><td>${i.invNumber}</td><td>${i.poNum||'—'}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate||'—'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="simple-notice">No invoices yet.</div>';
+    Admin.renderAdminBudgetSnapshot();
+  },
+
+  renderAdminBudgetSnapshot() {
+    const el=$('adminBudgetSnapshot'); if(!el) return;
+    // Group by division, show all lines including hidden (faded), sortable, with edit
+    const divs=[...new Set(STATE.budget.map(b=>b.div))].sort();
+    let rows=[];
+    for(const div of divs){
+      const cfg=DIV_CONFIG[div]||{name:div};
+      const lines=STATE.budget.filter(b=>b.div===div);
+      const opBudget=lines.filter(b=>!b.hideFromTotals).reduce((s,b)=>s+b.amt,0);
+      const poCommit=divPOCommitment(div);
+      const bal=opBudget-poCommit;
+      rows.push(`<tr style="background:var(--bg2);font-weight:700">
+        <td colspan="3" style="padding:6px 12px;font-size:12px">
+          <span style="font-weight:700">${div} — ${cfg.name||div}</span>
+          <span style="font-weight:400;color:var(--text2);font-size:11px;margin-left:8px">Op Budget: ${fmt(opBudget)} | POs: ${fmt(poCommit)} | Balance: <span style="color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</span></span>
+        </td>
+        <td style="text-align:right;padding:6px 12px"><strong>${fmt(opBudget)}</strong></td>
+        <td style="text-align:right;padding:6px 12px;color:var(--warning)">${fmt(poCommit)}</td>
+        <td style="text-align:right;padding:6px 12px;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
+        <td style="padding:6px 12px"></td>
+      </tr>`);
+      for(const b of lines){
+        const committed=acctPOCommitment(b.div,b.acct);
+        const lineBal=b.amt-committed;
+        rows.push(`<tr style="${b.hideFromTotals?'opacity:.45':''}">
+          <td style="padding:5px 12px;font-size:11px;color:var(--text3)">${b.div}</td>
+          <td style="padding:5px 12px;font-size:12px;font-weight:600">${b.acct}</td>
+          <td style="padding:5px 12px;font-size:12px;color:var(--text2)">${b.desc}${b.hideFromTotals?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}</td>
+          <td style="text-align:right;padding:5px 12px;font-size:12px">${fmt(b.amt)}</td>
+          <td style="text-align:right;padding:5px 12px;font-size:12px;color:var(--text2)">${fmt(committed)}</td>
+          <td style="text-align:right;padding:5px 12px;font-size:12px;font-weight:600;color:${lineBal<0?'var(--danger)':'var(--success)'}">${fmt(lineBal)}</td>
+          <td style="padding:5px 12px"><button class="btn btn-secondary btn-xs" onclick="Admin.openEditBudgetLine('${b._id}')">✏️</button></td>
+        </tr>`);
+      }
+    }
+    el.innerHTML=`<table><thead><tr>
+      <th>Div</th><th>Account</th><th>Description</th>
+      <th style="text-align:right">Budget</th><th style="text-align:right">PO Commit</th>
+      <th style="text-align:right">Balance</th><th></th>
+    </tr></thead><tbody>${rows.join('')}</tbody></table>`;
   },
 
   renderBudgetOverview() {
@@ -2324,6 +2374,7 @@ const Admin = {
     hideLoading();
     App.closeModal('editBudgetModal');
     Admin.renderBudgetOverview();
+    Admin.renderAdminBudgetSnapshot();
     Admin.renderDashboard();
     showToast('Budget line updated ✓','success');
   },
@@ -3056,7 +3107,7 @@ const Executive = {
         const acctRows=getBudgetForDivExec(divCode);
         if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>PO Committed</th><th>Remaining</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const committed=acctPOCommitment(divCode,b.acct);const bal=b.amt-committed;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:var(--warning)">${fmt(committed)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="6" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
       }
-      if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs</div>${pos.slice(0,4).map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)"><span>${p.poNum} · ${p.vendor.length>22?p.vendor.slice(0,22)+'…':p.vendor} ${tagHTML(p.code||'')}</span><span style="color:var(--success);font-weight:600">${fmt(p.balance)}</span></div>`).join('')}${pos.length>4?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${pos.length-4} more…</div>`:''}</div>`;
+      if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px"><div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs (${pos.length})</div>${pos.map(p=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--bg2)"><span style="display:flex;align-items:center;gap:6px"><span style="color:var(--text2)">${p.poNum}</span> <span>${p.vendor.length>28?p.vendor.slice(0,28)+'…':p.vendor}</span> ${tagHTML(p.code||'')}</span><span style="color:var(--success);font-weight:600;white-space:nowrap">${fmt(p.balance)}</span></div>`).join('')}</div>`;
       return card+'</div>';
     }).join('');
     content.innerHTML=html;
