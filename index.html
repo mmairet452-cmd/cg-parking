@@ -687,6 +687,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <select id="adminYearFilter" class="ctx-select" onchange="Admin.filterChanged()">
         <option value="">All Years</option>
         <option>FY25</option><option>FY26</option><option>FY27</option>
+        <option>FY28</option><option>FY29</option><option>FY30</option>
       </select>
     </div>
     <nav class="sidebar-nav">
@@ -696,8 +697,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         <span id="adminAlertBadge" class="nav-badge" style="display:none">0</span>
       </div>
       <div class="nav-section">Budget</div>
-      <div class="nav-item" onclick="Admin.showPage('budgetOverview')" data-page="budgetOverview"><span class="ni-icon">💰</span> Budget Overview</div>
-      <div class="nav-item" onclick="Admin.showPage('budgetImport')" data-page="budgetImport"><span class="ni-icon">📥</span> Import Budget</div>
+      <div class="nav-item" onclick="Admin.showPage('budgetOverview')" data-page="budgetOverview"><span class="ni-icon">💰</span> Operating Budget</div>
+      <div class="nav-item" onclick="Admin.showPage('cipBudget')" data-page="cipBudget"><span class="ni-icon">🏗️</span> CIP Budget</div>
+      <div class="nav-item" onclick="Admin.showPage('revenue')" data-page="revenue"><span class="ni-icon">📈</span> Revenue</div>
+      <div class="nav-item" onclick="Admin.showPage('budgetImport')" data-page="budgetImport"><span class="ni-icon">📥</span> Import Data</div>
       <div class="nav-section">Purchase Orders</div>
       <div class="nav-item" onclick="Admin.showPage('poManagement')" data-page="poManagement"><span class="ni-icon">📋</span> PO Management</div>
       <div class="nav-item" onclick="Admin.showPage('pendingOrders')" data-page="pendingOrders">
@@ -834,6 +837,38 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         </div>
       </div>
 
+      <!-- CIP BUDGET -->
+      <div id="page-cipBudget" class="page">
+        <div class="section-header">
+          <span class="section-title">🏗️ CIP Budget — Capital Improvement Projects</span>
+          <button class="btn btn-primary btn-sm" onclick="Admin.openCIPModal()">+ Add Project</button>
+        </div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Track capital projects separately from operating budget. Linked CIP POs auto-populate usage.</p>
+        <div id="cipBudgetContent"></div>
+      </div>
+
+      <!-- REVENUE -->
+      <div id="page-revenue" class="page">
+        <div class="section-header">
+          <span class="section-title">📈 Revenue</span>
+          <div style="display:flex;gap:8px">
+            <select id="revFY" class="form-input" style="width:90px" onchange="Admin.renderRevenue()">
+              <option>FY26</option><option>FY27</option><option>FY28</option><option>FY29</option><option>FY30</option>
+            </select>
+            <select id="revQuarter" class="form-input" style="width:110px" onchange="Admin.renderRevenue()">
+              <option value="">All Quarters</option>
+              <option value="Q1">Q1 (Oct–Dec)</option>
+              <option value="Q2">Q2 (Jan–Mar)</option>
+              <option value="Q3">Q3 (Apr–Jun)</option>
+              <option value="Q4">Q4 (Jul–Sep)</option>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="Admin.openRevenueEntryModal()">+ Enter Revenue</button>
+            <button class="btn btn-secondary btn-sm" onclick="Admin.pickRevenueImport()">📥 Import</button>
+          </div>
+        </div>
+        <div id="revenueContent"></div>
+      </div>
+
       <!-- PO MANAGEMENT -->
       <div id="page-poManagement" class="page">
         <div class="section-header">
@@ -957,8 +992,8 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         <div class="section-header">
           <span class="section-title">All Invoices</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <input type="text" id="invSearchInput" class="form-input" placeholder="Search…" style="width:180px" oninput="Admin.renderInvoiceList()">
-            <select id="invStatusFilter" class="form-input" style="width:130px" onchange="Admin.renderInvoiceList()">
+            <input type="text" id="invSearchInput" class="form-input" placeholder="Search…" style="width:160px" oninput="Admin.renderInvoiceList()">
+            <select id="invStatusFilter" class="form-input" style="width:120px" onchange="Admin.renderInvoiceList()">
               <option value="">All Status</option>
               <option value="Historical">Historical</option>
               <option value="Released">Released</option>
@@ -967,9 +1002,11 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
               <option value="Rejected">Rejected</option>
               <option value="no-po">No PO</option>
             </select>
-            <select id="invPOFilter" class="form-input" style="width:150px" onchange="Admin.renderInvoiceList()">
+            <select id="invPOFilter" class="form-input" style="width:120px" onchange="Admin.renderInvoiceList()">
               <option value="">All POs</option>
             </select>
+            <button class="btn btn-secondary btn-sm" onclick="Admin.deleteFY25Invoices()" title="Delete all invoices before Oct 1 2025">🗑 Pre-FY26</button>
+            <button class="btn btn-danger btn-sm" onclick="Admin.deleteAllInvoices()">🗑 Delete All</button>
           </div>
         </div>
         <!-- Tab bar -->
@@ -1162,6 +1199,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <select id="supYear" class="ctx-select" onchange="Supervisor.contextChanged()">
         <option value="">Select Year</option>
         <option>FY25</option><option selected>FY26</option><option>FY27</option>
+        <option>FY28</option><option>FY29</option><option>FY30</option>
       </select>
     </div>
     <nav class="sidebar-nav">
@@ -1379,6 +1417,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
           <label>Fiscal Year *</label>
           <select id="poFiscalYear" class="form-input">
             <option>FY25</option><option selected>FY26</option><option>FY27</option>
+            <option>FY28</option><option>FY29</option><option>FY30</option>
           </select>
         </div>
         <div class="form-group">
@@ -1805,13 +1844,9 @@ const Local = {
 // IN-MEMORY STATE (loaded from Supabase on login)
 // ═══════════════════════════════════════════════════════════════════════
 let STATE = {
-  budget: [],
-  pos: [],
-  invoices: [],
-  contracts: [],
-  pendingOrders: [],
-  changeRequests: [],
-  supervisors: [],
+  budget: [], pos: [], invoices: [], contracts: [],
+  pendingOrders: [], changeRequests: [], supervisors: [],
+  cipProjects: [], revenue: [],
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1966,6 +2001,7 @@ const DIV_CONFIG = {
 };
 
 const EXEC_CONFIG = [
+  { id:'everyone', name:'Everyone', photo:'assets/COCG_photo.jpg', isEveryone:true },
   { id:'overview', name:'Overview', photo:'assets/COCG_photo.jpg', divs:Object.keys(DIV_CONFIG).sort(), showBudget:false, notes:{} },
   { id:'beltran', name:'Monica Beltran', photo:'assets/M_Beltran_photo.jpg', divs:['8001','8000','8002','8100','8101','8102','8103','8104','8105','8200','8300','8800'], showBudget:true, notes:{} },
   { id:'kowalchik', name:'John Kowalchik', photo:'assets/John_K_photo.jpeg', divs:['8100','8101','8102','8103','8104','8105','8200','8300'], showBudget:true, showPbP:true, notes:{} },
@@ -2018,11 +2054,100 @@ function tagHTML(code) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// FISCAL YEAR UTILS
+// ═══════════════════════════════════════════════════════════════════════
+// FY26 = Oct 1 2025 – Sep 30 2026, FY27 = Oct 1 2026 – Sep 30 2027, etc.
+function fyStartDate(fy) {
+  const yr = parseInt(fy.replace('FY','')) + 1999; // FY26 → 2025
+  return `${yr}-10-01`;
+}
+function fyEndDate(fy) {
+  const yr = parseInt(fy.replace('FY','')) + 2000; // FY26 → 2026
+  return `${yr}-09-30`;
+}
+function dateInFY(dateStr, fy) {
+  if (!dateStr) return false;
+  return dateStr >= fyStartDate(fy) && dateStr <= fyEndDate(fy);
+}
+function activeFY() {
+  // Returns the current active fiscal year based on today's date
+  const now = new Date().toISOString().split('T')[0];
+  for (const fy of ['FY26','FY27','FY28','FY29','FY30','FY25']) {
+    if (now >= fyStartDate(fy) && now <= fyEndDate(fy)) return fy;
+  }
+  return 'FY26';
+}
+const CURRENT_FY = activeFY();
+
+// ═══════════════════════════════════════════════════════════════════════
+// MULTIACCТ PARSING — structured format
+// ═══════════════════════════════════════════════════════════════════════
+// Returns array of {div, acct, amount} from a PO's account distribution
+// Handles formats: "8101:126948, 8102:126595" OR "div 8101:2500, 8102:2500 — acct 4611"
+// NEVER does regex on free-text descriptions — only on structured key:value pairs
+function parsePODistribution(po) {
+  const results = [];
+  if (po.div && po.acct && !po.multiAcct) {
+    // Simple single div/acct PO
+    results.push({ div: po.div, acct: po.acct, amount: po.start || 0 });
+    return results;
+  }
+  if (!po.multiAcct) return results;
+
+  const raw = po.multiAcct;
+
+  // Pattern 1: "div1:amt1, div2:amt2" (div-only, same acct)
+  // e.g. "8101:126948, 8102:126595, 8103:110860, 8104:106479, 8105:116397"
+  const divAmtPairs = raw.match(/\b(8\d{3})\s*:\s*([\d,]+(?:\.\d+)?)/g);
+  if (divAmtPairs && divAmtPairs.length > 0) {
+    // Check if there's a shared acct mentioned
+    const acctMatch = raw.match(/acct\s*([\d]+)/i) || (po.acct ? [null, po.acct] : null);
+    const sharedAcct = acctMatch ? acctMatch[1] : po.acct || null;
+    for (const pair of divAmtPairs) {
+      const m = pair.match(/(\d{4})\s*:\s*([\d,]+(?:\.\d+)?)/);
+      if (m) {
+        results.push({ div: m[1], acct: sharedAcct, amount: parseFloat(m[2].replace(/,/g,'')) });
+      }
+    }
+    if (results.length > 0) return results;
+  }
+
+  // Pattern 2: "div-acct: amt" e.g. "8200-5209: 3948, 8300-4600: 2333"
+  const divAcctAmtPairs = raw.match(/\b(8\d{3})[- ]([\d]+)\s*:\s*([\d,]+(?:\.\d+)?)/g);
+  if (divAcctAmtPairs && divAcctAmtPairs.length > 0) {
+    for (const pair of divAcctAmtPairs) {
+      const m = pair.match(/(8\d{3})[- ]([\d]+)\s*:\s*([\d,]+(?:\.\d+)?)/);
+      if (m) {
+        results.push({ div: m[1], acct: m[2], amount: parseFloat(m[3].replace(/,/g,'')) });
+      }
+    }
+    if (results.length > 0) return results;
+  }
+
+  // Pattern 3: freetext like "$140 each from 8101-8105 acct 5204" — range expansion
+  // e.g. "$1524.46 from each garage 8101-8105 acct 5204"
+  const rangeMatch = raw.match(/\$([\d,]+(?:\.\d+)?)\s+(?:each\s+)?(?:from\s+)?(?:each\s+)?\w*\s*(8\d{3})[- ](8\d{3})\s+acct\s+([\d]+)/i);
+  if (rangeMatch) {
+    const amt = parseFloat(rangeMatch[1].replace(/,/g,''));
+    const startDiv = parseInt(rangeMatch[2]);
+    const endDiv = parseInt(rangeMatch[3]);
+    const acct = rangeMatch[4];
+    for (let d = startDiv; d <= endDiv; d++) {
+      results.push({ div: String(d), acct, amount: amt });
+    }
+    if (results.length > 0) return results;
+  }
+
+  // If nothing parsed and po has div, fall back to single div
+  if (po.div) results.push({ div: po.div, acct: po.acct, amount: po.start || 0 });
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // BUDGET CALCS (operate on STATE)
 // ═══════════════════════════════════════════════════════════════════════
 function getBudget() { return STATE.budget; }
 function getBudgetForDiv(div) { return STATE.budget.filter(b=>b.div===div); }
-// Exec view excludes lines marked hideFromTotals
 function getBudgetForDivExec(div) { return STATE.budget.filter(b=>b.div===div && !b.hideFromTotals); }
 
 function divBudgetTotal(div, execOnly=false) {
@@ -2030,40 +2155,46 @@ function divBudgetTotal(div, execOnly=false) {
   return rows.reduce((s,b)=>s+b.amt, 0);
 }
 
-// Total PO starting amount committed against a division (FY26 operating only — CIP excluded)
-function divPOCommitment(div) {
-  let total=0;
-  for(const p of STATE.pos) {
-    if(p.fiscal==='FY25') continue;
-    if(p.budgetSource==='cip') continue;
-    if(p.div===div) {
-      total+=p.start;
-    } else if(p.multiAcct) {
-      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+(?:\\.\\d+)?)','i'));
-      if(m) total+=parseFloat(m[1]);
+// Filter POs relevant to a fiscal year (must match fiscal field, not be CIP)
+function getPOsForFY(fy) {
+  const prev = 'FY'+(parseInt(fy.replace('FY',''))-1); // FY25 for FY26
+  return STATE.pos.filter(p =>
+    p.fiscal === fy &&
+    p.budgetSource !== 'cip'
+  );
+}
+
+// Total PO starting amount committed against a specific division in a FY
+// Uses proper parsePODistribution — no more broken regex on free text
+function divPOCommitment(div, fy=CURRENT_FY) {
+  let total = 0;
+  for (const p of getPOsForFY(fy)) {
+    const dist = parsePODistribution(p);
+    if (dist.length === 0) {
+      // No distribution info yet — don't count (tricky POs)
+      continue;
+    }
+    for (const d of dist) {
+      if (d.div === div) total += d.amount;
     }
   }
   return total;
 }
 
-// PO commitment for a specific div+account (FY26 operating only)
-function acctPOCommitment(div, acct) {
-  let total=0;
-  for(const p of STATE.pos) {
-    if(p.fiscal==='FY25') continue;
-    if(p.budgetSource==='cip') continue;
-    if(p.div===div && p.acct===acct) {
-      total+=p.start;
-    } else if(p.multiAcct && p.acct===acct) {
-      const m=p.multiAcct.match(new RegExp(div+'[^0-9]*(\\d+(?:\\.\\d+)?)','i'));
-      if(m) total+=parseFloat(m[1]);
+// Total PO commitment for a specific div+account in a FY
+function acctPOCommitment(div, acct, fy=CURRENT_FY) {
+  let total = 0;
+  for (const p of getPOsForFY(fy)) {
+    const dist = parsePODistribution(p);
+    for (const d of dist) {
+      if (d.div === div && String(d.acct) === String(acct)) total += d.amount;
     }
   }
   return total;
 }
 
 function acctBudgetRemaining(div, acct) {
-  const budgetLine = getBudgetForDiv(div).filter(b=>b.acct===acct).reduce((s,b)=>s+b.amt,0);
+  const budgetLine = getBudgetForDiv(div).filter(b=>String(b.acct)===String(acct)).reduce((s,b)=>s+b.amt,0);
   return budgetLine - acctPOCommitment(div, acct);
 }
 
@@ -2135,31 +2266,35 @@ const App = {
     STATE.pendingOrders = pendingOrders;
     STATE.changeRequests = changeRequests;
 
-    // Supervisors from settings
+    // Supervisors, CIP projects, revenue from settings
     const supRow = allSettings.find(r=>r.key==='supervisors');
     STATE.supervisors = supRow ? supRow.value : [];
+    const cipRow = allSettings.find(r=>r.key==='cipProjects');
+    STATE.cipProjects = cipRow ? cipRow.value : [];
+    const revRow = allSettings.find(r=>r.key==='revenue');
+    STATE.revenue = revRow ? revRow.value : [];
 
     // Recalculate PO balances from invoices (source of truth)
     App.recalcPOBalances();
   },
 
-  // Sum of active (non-cancelled/rejected) invoices for a PO
-  getInvoicedTotal(poNum) {
+  // Sum of active invoices for a PO within the PO's fiscal year
+  getInvoicedTotal(poNum, fy=null) {
+    const po = STATE.pos.find(p=>p.poNum===poNum);
+    const targetFY = fy || po?.fiscal || CURRENT_FY;
+    const start = fyStartDate(targetFY);
+    const end = fyEndDate(targetFY);
     return STATE.invoices
-      .filter(i=>i.poNum===poNum && i.status!=='Cancelled' && i.status!=='Rejected')
-      .reduce((s,i)=>s+(i.amount||i.invAmount||0),0);
+      .filter(i => i.poNum===poNum
+        && i.status!=='Cancelled' && i.status!=='Rejected'
+        && i.invDate >= start && i.invDate <= end)
+      .reduce((s,i)=>s+(i.amount||i.invAmount||0), 0);
   },
 
-  // PO balance = start - sum of active invoices (source of truth)
+  // PO balance = start - sum of active invoices within PO's FY
   recalcPOBalances() {
-    const invoicesByPO = {};
-    for (const inv of STATE.invoices) {
-      if (!inv.poNum || inv.status==='Cancelled' || inv.status==='Rejected') continue;
-      if (!invoicesByPO[inv.poNum]) invoicesByPO[inv.poNum] = 0;
-      invoicesByPO[inv.poNum] += (inv.amount || inv.invAmount || 0);
-    }
     for (const po of STATE.pos) {
-      const invoiced = invoicesByPO[po.poNum] || 0;
+      const invoiced = App.getInvoicedTotal(po.poNum, po.fiscal);
       po.balance = Math.max(0, (po.start || 0) - invoiced);
       po._invoicedTotal = invoiced;
     }
@@ -2329,7 +2464,8 @@ const Admin = {
     document.querySelectorAll('#adminApp .nav-item').forEach(n=>n.classList.remove('active'));
     $(`page-${page}`)?.classList.add('active');
     document.querySelector(`#adminApp .nav-item[data-page="${page}"]`)?.classList.add('active');
-    const titles={dashboard:'Dashboard',budgetOverview:'Budget Overview',budgetImport:'Import Budget',
+    const titles={dashboard:'Dashboard',budgetOverview:'Operating Budget',cipBudget:'CIP Budget',
+      revenue:'Revenue',budgetImport:'Import Data',
       poManagement:'PO Management',pendingOrders:'Pending Orders',changeRequests:'Change Requests',
       invoiceEntry:'Invoice Entry',invoiceList:'All Invoices',invoiceImport:'Import Invoices',
       invoiceHealth:'Invoice Health',monthlyTracker:'Monthly Tracker',pbpParkmobile:'PbP / ParkMobile',
@@ -2337,6 +2473,8 @@ const Admin = {
       alerts:'Alerts',exports:'Export Reports',settings:'Settings'};
     $('adminPageTitle').textContent=titles[page]||page;
     if(page==='budgetOverview') Admin.renderBudgetOverview();
+    if(page==='cipBudget') Admin.renderCIPBudget();
+    if(page==='revenue') Admin.renderRevenue();
     if(page==='pendingOrders') Admin.renderPendingOrders();
     if(page==='changeRequests') Admin.renderChangeRequests();
     if(page==='alerts') Admin.renderAllAlerts();
@@ -3270,6 +3408,249 @@ const Admin = {
     showToast(`PO ${poNum} updated ✓`,'success');
   },
 
+  // ── BULK DELETE INVOICES ──────────────────────────────────────────
+  async deleteAllInvoices() {
+    const count = STATE.invoices.length;
+    if(!confirm(`Delete ALL ${count} invoices? This cannot be undone.`)) return;
+    showLoading('Deleting all invoices…');
+    // Delete in batches
+    const ids = STATE.invoices.map(i=>i._id).filter(Boolean);
+    for(let i=0;i<ids.length;i+=20){
+      const batch=ids.slice(i,i+20);
+      for(const id of batch) await SDB.delete('invoices',id);
+    }
+    STATE.invoices=[];
+    App.recalcPOBalances();
+    hideLoading();
+    Admin.renderInvoiceList(); Admin.renderDashboard(); Admin.renderPOTable();
+    showToast(`All ${count} invoices deleted.`,'success');
+  },
+
+  async deleteFY25Invoices() {
+    const fy25end = fyEndDate('FY25'); // 2025-09-30
+    const old = STATE.invoices.filter(i=>(i.invDate||'') < fyStartDate('FY26'));
+    if(!old.length){showToast('No pre-FY26 invoices found.'); return;}
+    if(!confirm(`Delete ${old.length} pre-FY26 invoices (before Oct 1 2025)?`)) return;
+    showLoading(`Deleting ${old.length} old invoices…`);
+    for(const inv of old) if(inv._id) await SDB.delete('invoices',inv._id);
+    STATE.invoices=await SDB.getAll('invoices');
+    App.recalcPOBalances();
+    hideLoading();
+    Admin.renderInvoiceList(); Admin.renderDashboard();
+    showToast(`${old.length} pre-FY26 invoices deleted.`,'success');
+  },
+
+  // ── CIP BUDGET ───────────────────────────────────────────────────
+  renderCIPBudget() {
+    const el=$('cipBudgetContent'); if(!el) return;
+    const projects = STATE.cipProjects || [];
+    const cipPOs = STATE.pos.filter(p=>p.budgetSource==='cip');
+
+    if(!projects.length && !cipPOs.length){
+      el.innerHTML=`<div class="simple-notice">No CIP projects yet. Click "+ Add Project" to start.<br><br>
+        <strong>CIP POs detected:</strong> ${cipPOs.length} POs flagged as CIP (e.g. PO 15641 Flowbird).</div>`;
+      return;
+    }
+
+    // Auto-include CIP POs not already in a project
+    const linkedPOs = new Set((projects||[]).flatMap(p=>p.linkedPOs||[]));
+    const unlinkedCIP = cipPOs.filter(p=>!linkedPOs.has(p.poNum));
+
+    el.innerHTML=`
+      <div class="table-wrap" style="margin-bottom:16px"><table>
+        <thead><tr><th>Project</th><th>Division</th><th>FY</th><th style="text-align:right">Budget</th><th style="text-align:right">Used (POs)</th><th style="text-align:right">Variance</th><th>Linked POs</th><th></th></tr></thead>
+        <tbody>
+        ${projects.map(proj=>{
+          const projPOs=cipPOs.filter(p=>(proj.linkedPOs||[]).includes(p.poNum));
+          const used=projPOs.reduce((s,p)=>s+p.start,0);
+          const variance=proj.budget-used;
+          return `<tr>
+            <td><strong>${proj.name}</strong></td>
+            <td><span class="tag tag-gray" style="font-size:10px">${proj.div||'—'}</span></td>
+            <td>${proj.fy||'—'}</td>
+            <td style="text-align:right">${fmt(proj.budget)}</td>
+            <td style="text-align:right;color:var(--warning)">${fmt(used)}</td>
+            <td style="text-align:right;font-weight:700;color:${variance<0?'var(--danger)':'var(--success)'}">${fmt(variance)}</td>
+            <td style="font-size:11px;color:var(--text2)">${projPOs.map(p=>p.poNum).join(', ')||'—'}</td>
+            <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteCIPProject('${proj.id}')">✕</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>
+      ${unlinkedCIP.length?`<div class="simple-notice">
+        <strong>${unlinkedCIP.length} unlinked CIP PO(s):</strong> ${unlinkedCIP.map(p=>`PO ${p.poNum} ${p.vendor} (${fmt(p.start)})`).join(', ')} — Add a project and link them.
+      </div>`:''}`;
+  },
+
+  openCIPModal(proj=null) {
+    const divOpts=Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}" ${proj?.div===k?'selected':''}>${k} ${v.name}</option>`).join('');
+    const cipPOs=STATE.pos.filter(p=>p.budgetSource==='cip');
+    const modal=document.createElement('div');
+    modal.className='modal-overlay'; modal.style.display='flex';
+    modal.innerHTML=`<div class="modal" style="max-width:500px">
+      <div class="modal-header"><span class="modal-title">${proj?'Edit':'Add'} CIP Project</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-group"><label>Project Name *</label><input type="text" id="cipName" class="form-input" value="${proj?.name||''}" placeholder="e.g. CIP-2026-014 Garage Renovation"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Division</label><select id="cipDiv" class="form-input"><option value="">All</option>${divOpts}</select></div>
+          <div class="form-group"><label>Fiscal Year</label><select id="cipFY" class="form-input">
+            ${['FY26','FY27','FY28','FY29','FY30'].map(f=>`<option ${(proj?.fy||CURRENT_FY)===f?'selected':''}>${f}</option>`).join('')}
+          </select></div>
+        </div>
+        <div class="form-group"><label>Project Budget ($) *</label><input type="number" id="cipBudget" class="form-input" value="${proj?.budget||''}" placeholder="0.00"></div>
+        <div class="form-group"><label>Description</label><textarea id="cipDesc" class="form-input" rows="2">${proj?.desc||''}</textarea></div>
+        <div class="form-group"><label>Link CIP POs</label>
+          <div style="max-height:120px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:8px">
+            ${cipPOs.map(p=>`<label class="toggle-label" style="margin-bottom:4px">
+              <input type="checkbox" value="${p.poNum}" ${(proj?.linkedPOs||[]).includes(p.poNum)?'checked':''}>
+              PO ${p.poNum} — ${p.vendor} (${fmt(p.start)})
+            </label>`).join('')}
+            ${!cipPOs.length?'<span style="color:var(--text3);font-size:12px">No CIP POs yet</span>':''}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="Admin.saveCIPProject('${proj?.id||''}',this.closest('.modal-overlay'))">Save Project</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  },
+
+  async saveCIPProject(existingId, overlay) {
+    const name=$('cipName')?.value.trim(); if(!name){showToast('Project name required','error');return;}
+    const budget=parseFloat($('cipBudget')?.value)||0;
+    const linkedPOs=[...overlay.querySelectorAll('input[type=checkbox]:checked')].map(cb=>cb.value);
+    const proj={id:existingId||Date.now().toString(), name, div:$('cipDiv')?.value||'', fy:$('cipFY')?.value||CURRENT_FY,
+      budget, desc:$('cipDesc')?.value||'', linkedPOs};
+    if(!STATE.cipProjects) STATE.cipProjects=[];
+    const idx=STATE.cipProjects.findIndex(p=>p.id===existingId);
+    if(idx>=0) STATE.cipProjects[idx]=proj; else STATE.cipProjects.push(proj);
+    showLoading('Saving…');
+    await SDB.setSetting('cipProjects', STATE.cipProjects);
+    hideLoading();
+    overlay.remove();
+    Admin.renderCIPBudget();
+    showToast('CIP project saved ✓','success');
+  },
+
+  async deleteCIPProject(id) {
+    if(!confirm('Delete this CIP project?')) return;
+    STATE.cipProjects=(STATE.cipProjects||[]).filter(p=>p.id!==id);
+    await SDB.setSetting('cipProjects', STATE.cipProjects);
+    Admin.renderCIPBudget();
+    showToast('CIP project deleted.','success');
+  },
+
+  // ── REVENUE ───────────────────────────────────────────────────────
+  renderRevenue() {
+    const el=$('revenueContent'); if(!el) return;
+    const fy=$('revFY')?.value||CURRENT_FY;
+    const qFilter=$('revQuarter')?.value||'';
+    const records=(STATE.revenue||[]).filter(r=>r.fy===fy&&(!qFilter||r.quarter===qFilter));
+    const divs=[...new Set(records.map(r=>r.div))].sort();
+
+    if(!records.length){
+      el.innerHTML=`<div class="simple-notice">No revenue data for ${fy}${qFilter?' '+qFilter:''}. Click "+ Enter Revenue" to add, or use Import.</div>`;
+      return;
+    }
+
+    const quarters=['Q1','Q2','Q3','Q4'];
+    const qLabel={Q1:'Q1 Oct–Dec',Q2:'Q2 Jan–Mar',Q3:'Q3 Apr–Jun',Q4:'Q4 Jul–Sep'};
+
+    // Summary stats
+    const totalAdopted=records.reduce((s,r)=>s+r.adopted,0);
+    const totalCurrent=records.reduce((s,r)=>s+r.current,0);
+    const variance=totalCurrent-totalAdopted;
+
+    el.innerHTML=`
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card info"><div class="stat-label">Adopted Budget</div><div class="stat-value">${fmtK(totalAdopted)}</div><div class="stat-sub">${fy}</div></div>
+        <div class="stat-card success"><div class="stat-label">Current Revenue</div><div class="stat-value">${fmtK(totalCurrent)}</div></div>
+        <div class="stat-card ${variance>=0?'success':'danger'}"><div class="stat-label">Variance</div><div class="stat-value">${variance>=0?'+':''}${fmtK(variance)}</div></div>
+        <div class="stat-card"><div class="stat-label">Entries</div><div class="stat-value">${records.length}</div></div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Division</th><th>Description</th><th>Quarter</th><th style="text-align:right">Adopted Budget</th><th style="text-align:right">Current Revenue</th><th style="text-align:right">Variance</th><th style="text-align:right">Running Balance</th><th></th></tr></thead>
+        <tbody>
+        ${(()=>{
+          let running=0;
+          return records.map(r=>{
+            const v=r.current-r.adopted;
+            running+=r.current;
+            return `<tr>
+              <td><span class="tag tag-gray" style="font-size:10px">${r.div||'—'}</span></td>
+              <td>${r.desc||'—'}</td>
+              <td><span class="tag tag-blue" style="font-size:10px">${r.quarter||'—'} ${qLabel[r.quarter]?`(${qLabel[r.quarter].split(' ')[1]})`:''}</span></td>
+              <td style="text-align:right">${fmt(r.adopted)}</td>
+              <td style="text-align:right;font-weight:600">${fmt(r.current)}</td>
+              <td style="text-align:right;color:${v>=0?'var(--success)':'var(--danger)'};font-weight:600">${v>=0?'+':''}${fmt(v)}</td>
+              <td style="text-align:right;color:var(--info)">${fmt(running)}</td>
+              <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteRevenue('${r.id}')">✕</button></td>
+            </tr>`;
+          }).join('');
+        })()}
+        </tbody>
+      </table></div>`;
+  },
+
+  openRevenueEntryModal() {
+    const divOpts=Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}">${k} ${v.name}</option>`).join('');
+    const modal=document.createElement('div');
+    modal.className='modal-overlay'; modal.style.display='flex';
+    modal.innerHTML=`<div class="modal" style="max-width:520px">
+      <div class="modal-header"><span class="modal-title">📈 Enter Revenue</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group"><label>Fiscal Year</label><select id="revEntryFY" class="form-input">
+            ${['FY26','FY27','FY28','FY29','FY30'].map(f=>`<option ${f===CURRENT_FY?'selected':''}>${f}</option>`).join('')}
+          </select></div>
+          <div class="form-group"><label>Quarter</label><select id="revEntryQ" class="form-input">
+            <option value="Q1">Q1 (Oct–Dec)</option><option value="Q2">Q2 (Jan–Mar)</option>
+            <option value="Q3">Q3 (Apr–Jun)</option><option value="Q4">Q4 (Jul–Sep)</option>
+          </select></div>
+        </div>
+        <div class="form-group"><label>Division</label><select id="revEntryDiv" class="form-input"><option value="">All / General</option>${divOpts}</select></div>
+        <div class="form-group"><label>Description *</label><input type="text" id="revEntryDesc" class="form-input" placeholder="e.g. Parking Meter Revenue, Garage Revenue"></div>
+        <div class="form-row">
+          <div class="form-group"><label>Adopted Budget ($)</label><input type="number" id="revEntryAdopted" class="form-input" placeholder="0.00"></div>
+          <div class="form-group"><label>Current Revenue ($)</label><input type="number" id="revEntryCurrent" class="form-input" placeholder="0.00"></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="Admin.saveRevenue(this.closest('.modal-overlay'))">Save</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  },
+
+  async saveRevenue(overlay) {
+    const desc=$('revEntryDesc')?.value.trim(); if(!desc){showToast('Description required','error');return;}
+    const rec={id:Date.now().toString(), fy:$('revEntryFY')?.value||CURRENT_FY,
+      quarter:$('revEntryQ')?.value||'Q1', div:$('revEntryDiv')?.value||'',
+      desc, adopted:parseFloat($('revEntryAdopted')?.value)||0,
+      current:parseFloat($('revEntryCurrent')?.value)||0};
+    if(!STATE.revenue) STATE.revenue=[];
+    STATE.revenue.push(rec);
+    showLoading('Saving…');
+    await SDB.setSetting('revenue', STATE.revenue);
+    hideLoading();
+    overlay.remove();
+    Admin.renderRevenue();
+    showToast('Revenue entry saved ✓','success');
+  },
+
+  async deleteRevenue(id) {
+    STATE.revenue=(STATE.revenue||[]).filter(r=>r.id!==id);
+    await SDB.setSetting('revenue', STATE.revenue);
+    Admin.renderRevenue();
+  },
+
+  pickRevenueImport() {
+    showToast('Upload a CSV/XLSX with columns: FY, Quarter, Division, Description, Adopted, Current','');
+  },
+
   // ── PENDING ORDERS ────────────────────────────────────────────────
   renderPendingOrders() {
     const orders=STATE.pendingOrders;
@@ -3653,10 +4034,12 @@ const Supervisor = {
 const Executive = {
   init() {
     const tabs=$('execPersonTabs');
-    tabs.innerHTML=EXEC_CONFIG.map(p=>`<div class="exec-tab ${p.id==='overview'?'active':''}" onclick="Executive.selectPerson('${p.id}')" id="exec-tab-${p.id}">
-      <img src="${p.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'"> ${p.name}
-    </div>`).join('');
-    Executive.render('overview');
+    tabs.innerHTML=EXEC_CONFIG.map(p=>`
+      <div class="exec-tab ${p.id==='everyone'?'active':''}" onclick="Executive.selectPerson('${p.id}')" id="exec-tab-${p.id}">
+        <img src="${p.photo}" style="width:26px;height:26px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'">
+        <span>${p.name}</span>
+      </div>`).join('');
+    Executive.render('everyone');
   },
 
   selectPerson(id) {
@@ -3665,103 +4048,325 @@ const Executive = {
     Executive.render(id);
   },
 
+  // ── EVERYONE DASHBOARD ──────────────────────────────────────────
+  renderEveryone() {
+    const content=$('execContent');
+    content.innerHTML=`
+      <!-- Filters row -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:center">
+        <select id="evFY" class="form-input" style="width:90px" onchange="Executive.refreshEveryone()">
+          ${['FY26','FY27','FY28','FY29','FY30'].map(f=>`<option ${f===CURRENT_FY?'selected':''}>${f}</option>`).join('')}
+        </select>
+        <select id="evDiv" class="form-input" style="width:150px" onchange="Executive.refreshEveryone()">
+          <option value="">All Divisions</option>
+          ${Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}">${k} ${v.name}</option>`).join('')}
+        </select>
+        <select id="evView" class="form-input" style="width:140px" onchange="Executive.refreshEveryone()">
+          <option value="operating">Operating Budget</option>
+          <option value="revenue">Revenue</option>
+          <option value="cip">CIP Projects</option>
+          <option value="po">PO Usage</option>
+        </select>
+      </div>
+      <div id="evContent"></div>`;
+    Executive.refreshEveryone();
+  },
+
+  refreshEveryone() {
+    const fy=$('evFY')?.value||CURRENT_FY;
+    const divF=$('evDiv')?.value||'';
+    const view=$('evView')?.value||'operating';
+    const el=$('evContent'); if(!el) return;
+
+    if(view==='operating'){
+      const divs=divF?[divF]:Object.keys(DIV_CONFIG).sort();
+      const rows=divs.map(div=>{
+        const budget=divBudgetTotal(div,true);
+        const commit=divPOCommitment(div,fy);
+        const bal=budget-commit;
+        const pct=budget>0?Math.min(100,Math.round(commit/budget*100)):0;
+        const cfg=DIV_CONFIG[div]||{};
+        return {div,cfg,budget,commit,bal,pct};
+      });
+      const totBudget=rows.reduce((s,r)=>s+r.budget,0);
+      const totCommit=rows.reduce((s,r)=>s+r.commit,0);
+      el.innerHTML=`
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card info"><div class="stat-label">Total Budget</div><div class="stat-value">${fmtK(totBudget)}</div><div class="stat-sub">${fy} Operating</div></div>
+          <div class="stat-card warning"><div class="stat-label">PO Committed</div><div class="stat-value">${fmtK(totCommit)}</div><div class="stat-sub">${Math.round(totCommit/totBudget*100)||0}% of budget</div></div>
+          <div class="stat-card ${totBudget-totCommit<0?'danger':'success'}"><div class="stat-label">Remaining</div><div class="stat-value">${fmtK(totBudget-totCommit)}</div></div>
+          <div class="stat-card"><div class="stat-label">Active POs</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal===fy&&p.budgetSource!=='cip').length}</div></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Commit</th><th style="text-align:right">Balance</th><th>Usage</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr>
+            <td>
+              <div style="display:flex;align-items:center;gap:8px">
+                <img src="${r.cfg.photo||''}" style="width:28px;height:28px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'">
+                <span style="font-weight:600">${r.div} — ${r.cfg.name||r.div}</span>
+              </div>
+            </td>
+            <td style="text-align:right">${fmt(r.budget)}</td>
+            <td style="text-align:right;color:var(--warning)">${fmt(r.commit)}</td>
+            <td style="text-align:right;font-weight:700;color:${r.bal<0?'var(--danger)':'var(--success)'}">${fmt(r.bal)}</td>
+            <td style="min-width:120px">
+              <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${r.pct}%</div>
+              ${budgetBar(r.commit,r.budget)}
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>`;
+
+    } else if(view==='revenue'){
+      const revData=(STATE.revenue||[]).filter(r=>r.fy===fy&&(!divF||r.div===divF));
+      if(!revData.length){el.innerHTML=`<div class="simple-notice">No revenue data for ${fy}${divF?' · '+divF:''}.</div>`;return;}
+      const total=revData.reduce((s,r)=>s+r.current,0);
+      const adopted=revData.reduce((s,r)=>s+r.adopted,0);
+      el.innerHTML=`
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card info"><div class="stat-label">Adopted Budget</div><div class="stat-value">${fmtK(adopted)}</div></div>
+          <div class="stat-card success"><div class="stat-label">Current Revenue</div><div class="stat-value">${fmtK(total)}</div></div>
+          <div class="stat-card ${total-adopted>=0?'success':'danger'}"><div class="stat-label">Variance</div><div class="stat-value">${total-adopted>=0?'+':''}${fmtK(total-adopted)}</div></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Division</th><th>Description</th><th>Quarter</th><th style="text-align:right">Adopted</th><th style="text-align:right">Current</th><th style="text-align:right">Variance</th></tr></thead>
+          <tbody>${revData.map(r=>`<tr>
+            <td><span class="tag tag-gray" style="font-size:10px">${r.div||'All'}</span></td>
+            <td>${r.desc}</td>
+            <td><span class="tag tag-blue" style="font-size:10px">${r.quarter}</span></td>
+            <td style="text-align:right">${fmt(r.adopted)}</td>
+            <td style="text-align:right;font-weight:600">${fmt(r.current)}</td>
+            <td style="text-align:right;color:${r.current-r.adopted>=0?'var(--success)':'var(--danger)'}">${r.current-r.adopted>=0?'+':''}${fmt(r.current-r.adopted)}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>`;
+
+    } else if(view==='cip'){
+      const projects=(STATE.cipProjects||[]);
+      const cipPOs=STATE.pos.filter(p=>p.budgetSource==='cip');
+      if(!projects.length){el.innerHTML=`<div class="simple-notice">No CIP projects. Admin must add projects first.</div>`;return;}
+      el.innerHTML=`<div class="table-wrap"><table>
+        <thead><tr><th>Project</th><th>Div</th><th>FY</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Usage</th><th style="text-align:right">Variance</th></tr></thead>
+        <tbody>${projects.filter(p=>!fy||p.fy===fy).filter(p=>!divF||p.div===divF).map(proj=>{
+          const used=cipPOs.filter(p=>(proj.linkedPOs||[]).includes(p.poNum)).reduce((s,p)=>s+p.start,0);
+          const v=proj.budget-used;
+          return `<tr>
+            <td><strong>${proj.name}</strong>${proj.desc?`<div style="font-size:11px;color:var(--text2)">${proj.desc}</div>`:''}
+            </td>
+            <td><span class="tag tag-gray" style="font-size:10px">${proj.div||'—'}</span></td>
+            <td>${proj.fy}</td>
+            <td style="text-align:right">${fmt(proj.budget)}</td>
+            <td style="text-align:right;color:var(--warning)">${fmt(used)}</td>
+            <td style="text-align:right;font-weight:700;color:${v<0?'var(--danger)':'var(--success)'}">${fmt(v)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
+
+    } else if(view==='po'){
+      const fyPOs=STATE.pos.filter(p=>p.fiscal===fy&&(!divF||p.div===divF||(p.multiAcct&&p.multiAcct.includes(divF))));
+      const totalStart=fyPOs.reduce((s,p)=>s+p.start,0);
+      const totalInvd=fyPOs.reduce((s,p)=>s+App.getInvoicedTotal(p.poNum,fy),0);
+      el.innerHTML=`
+        <div class="stats-grid" style="margin-bottom:16px">
+          <div class="stat-card info"><div class="stat-label">Total POs</div><div class="stat-value">${fyPOs.length}</div><div class="stat-sub">${fy}</div></div>
+          <div class="stat-card warning"><div class="stat-label">Total Committed</div><div class="stat-value">${fmtK(totalStart)}</div></div>
+          <div class="stat-card success"><div class="stat-label">Invoiced</div><div class="stat-value">${fmtK(totalInvd)}</div></div>
+          <div class="stat-card"><div class="stat-label">Remaining</div><div class="stat-value">${fmtK(totalStart-totalInvd)}</div></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>PO #</th><th>Vendor</th><th>Code</th><th>Div</th><th style="text-align:right">Starting</th><th style="text-align:right">Invoiced</th><th style="text-align:right">Balance</th><th>Usage</th></tr></thead>
+          <tbody>${fyPOs.map(p=>{
+            const inv=App.getInvoicedTotal(p.poNum,fy);
+            const bal=p.start-inv;
+            return `<tr>
+              <td><strong>${p.poNum}</strong></td>
+              <td style="font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.vendor}</td>
+              <td>${tagHTML(p.code)}</td>
+              <td><span class="tag tag-gray" style="font-size:10px">${p.div||'Multi'}</span></td>
+              <td style="text-align:right">${fmt(p.start)}</td>
+              <td style="text-align:right;color:var(--warning)">${fmt(inv)}</td>
+              <td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
+              <td style="min-width:90px">${budgetBar(inv,p.start)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>`;
+    }
+  },
+
+  // ── INDIVIDUAL EXEC VIEWS ────────────────────────────────────────
   render(id) {
     const cfg=EXEC_CONFIG.find(p=>p.id===id)||EXEC_CONFIG[0];
     const content=$('execContent');
+
+    if(id==='everyone') { Executive.renderEveryone(); return; }
+
     if(id==='overview'){
       const divs=Object.entries(DIV_CONFIG).sort((a,b)=>a[0].localeCompare(b[0]));
-      content.innerHTML=`<div class="stats-grid" style="margin-bottom:24px">
-        <div class="stat-card info"><div class="stat-label">Total Divisions</div><div class="stat-value">${divs.length}</div></div>
-        <div class="stat-card"><div class="stat-label">Active POs (FY26)</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal!=='FY25').length}</div></div>
-        <div class="stat-card warning"><div class="stat-label">FY25 Legacy POs</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal==='FY25').length}</div></div>
-        <div class="stat-card danger"><div class="stat-label">Expiring Contracts</div><div class="stat-value">${STATE.contracts.filter(c=>daysUntil(c.ctExpDate)<60).length}</div></div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
-        ${divs.map(([divCode,divCfg])=>{const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));return `<div class="exec-div-card"><div style="display:flex;align-items:center;gap:10px"><img src="${divCfg.photo}" style="width:40px;height:40px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'"><div><div style="font-weight:700">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div></div></div></div>`;}).join('')}
-      </div>`;
+      const totBudget=Object.keys(DIV_CONFIG).reduce((s,d)=>s+divBudgetTotal(d,true),0);
+      const totCommit=Object.keys(DIV_CONFIG).reduce((s,d)=>s+divPOCommitment(d),0);
+      content.innerHTML=`
+        <div class="stats-grid" style="margin-bottom:20px">
+          <div class="stat-card info"><div class="stat-label">Divisions</div><div class="stat-value">${divs.length}</div></div>
+          <div class="stat-card warning"><div class="stat-label">Active POs (${CURRENT_FY})</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal===CURRENT_FY).length}</div></div>
+          <div class="stat-card ${totBudget-totCommit<0?'danger':'success'}"><div class="stat-label">Budget Balance</div><div class="stat-value">${fmtK(totBudget-totCommit)}</div></div>
+          <div class="stat-card danger"><div class="stat-label">Expiring Contracts</div><div class="stat-value">${STATE.contracts.filter(c=>daysUntil(c.ctExpDate)<60).length}</div><div class="stat-sub">within 60 days</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${divs.map(([divCode,divCfg])=>{
+            const budget=divBudgetTotal(divCode,true);
+            const commit=divPOCommitment(divCode);
+            const bal=budget-commit;
+            const pct=budget>0?Math.min(100,Math.round(commit/budget*100)):0;
+            const pos=STATE.pos.filter(p=>p.fiscal===CURRENT_FY&&p.budgetSource!=='cip'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
+            return `<div class="exec-div-card">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+                <img src="${divCfg.photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
+                <div><div style="font-weight:700;font-size:13px">${divCfg.label}</div><div style="font-size:10px;color:var(--text2)">${pos.length} POs</div></div>
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                <span style="color:var(--text2)">Balance</span>
+                <span style="font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmtK(bal)}</span>
+              </div>
+              ${budgetBar(commit,budget)}
+              <div style="font-size:10px;color:var(--text3);margin-top:3px">${pct}% committed</div>
+            </div>`;
+          }).join('')}
+        </div>`;
       return;
     }
-    const divCodes=cfg.divs, notes=cfg.notes||{};
+
+    // Individual exec pages (Monica, John, Matt)
+    const divCodes=cfg.divs||[], notes=cfg.notes||{};
     let html='';
+
+    // Block by Block note for Matt
     if(id==='anderson'&&cfg.blockByBlock){
-      const bbBudget = getBudgetForDiv('8200').filter(b=>b.acct==='3401').reduce((s,b)=>s+b.amt,0);
-      const bbCommit = acctPOCommitment('8200','3401');
-      const bbRemain = bbBudget - bbCommit;
+      const bbBudget=getBudgetForDiv('8200').filter(b=>b.acct==='3401').reduce((s,b)=>s+b.amt,0);
+      const bbCommit=acctPOCommitment('8200','3401');
+      const bbRemain=bbBudget-bbCommit;
       html+=`<div class="block-by-block-note">📍 <strong>Block by Block (8200 - 3401):</strong> On Street meter maintenance &amp; collection.<br>
-        <span style="font-size:12px;color:var(--text2)">Budget: <strong>${fmt(bbBudget)}</strong> &nbsp;|&nbsp; PO Commitments: <strong style="color:var(--warning)">${fmt(bbCommit)}</strong> &nbsp;|&nbsp; Remaining Budget: <strong style="color:${bbRemain<0?'var(--danger)':'var(--success)'}">${fmt(bbRemain)}</strong></span>
+        <span style="font-size:12px;color:var(--text2)">Budget: <strong>${fmt(bbBudget)}</strong> &nbsp;|&nbsp; PO Commits: <strong style="color:var(--warning)">${fmt(bbCommit)}</strong> &nbsp;|&nbsp; Remaining: <strong style="color:${bbRemain<0?'var(--danger)':'var(--success)'}">${fmt(bbRemain)}</strong></span>
       </div>`;
     }
+
+    // Summary KPIs
     if(cfg.showBudget){
       const totalBudget=divCodes.reduce((s,d)=>s+divBudgetTotal(d,true),0);
       const totalPO=divCodes.reduce((s,d)=>s+divPOCommitment(d),0);
       const totalRem=totalBudget-totalPO;
-      html+=`<div class="stats-grid" style="margin-bottom:20px">
-        <div class="stat-card info"><div class="stat-label">Total Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">FY26</div></div>
-        <div class="stat-card warning"><div class="stat-label">PO Commitments</div><div class="stat-value">${fmtK(totalPO)}</div></div>
-        <div class="stat-card ${totalRem<0?'danger':'success'}"><div class="stat-label">Remaining</div><div class="stat-value">${fmtK(totalRem)}</div></div>
-        <div class="stat-card"><div class="stat-label">Active POs</div><div class="stat-value">${STATE.pos.filter(p=>p.fiscal!=='FY25'&&divCodes.some(d=>p.div===d||(p.multiAcct&&p.multiAcct.includes(d)))).length}</div></div>
+      const totalInvd=divCodes.reduce((s,d)=>{
+        const divPOs=STATE.pos.filter(p=>p.fiscal===CURRENT_FY&&p.budgetSource!=='cip'&&(p.div===d||(p.multiAcct&&p.multiAcct.includes(d))));
+        return s+divPOs.reduce((ss,p)=>ss+App.getInvoicedTotal(p.poNum),0);
+      },0);
+      html+=`<div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card info"><div class="stat-label">Operating Budget</div><div class="stat-value">${fmtK(totalBudget)}</div><div class="stat-sub">${CURRENT_FY}</div></div>
+        <div class="stat-card warning"><div class="stat-label">PO Commitments</div><div class="stat-value">${fmtK(totalPO)}</div><div class="stat-sub">${Math.round(totalPO/totalBudget*100)||0}% of budget</div></div>
+        <div class="stat-card ${totalRem<0?'danger':'success'}"><div class="stat-label">Budget Balance</div><div class="stat-value">${fmtK(totalRem)}</div></div>
+        <div class="stat-card"><div class="stat-label">Invoiced YTD</div><div class="stat-value">${fmtK(totalInvd)}</div><div class="stat-sub">of PO commitments</div></div>
       </div>`;
+
+      // Revenue snapshot if exists
+      const myRev=(STATE.revenue||[]).filter(r=>r.fy===CURRENT_FY&&divCodes.includes(r.div));
+      if(myRev.length){
+        const revTotal=myRev.reduce((s,r)=>s+r.current,0);
+        const revAdopted=myRev.reduce((s,r)=>s+r.adopted,0);
+        html+=`<div class="card" style="margin-bottom:16px">
+          <div style="font-weight:700;margin-bottom:10px">📈 Revenue — ${CURRENT_FY}</div>
+          <div class="exec-kpi-row">
+            <div class="exec-kpi"><div class="exec-kpi-label">Adopted</div><div class="exec-kpi-val">${fmtK(revAdopted)}</div></div>
+            <div class="exec-kpi"><div class="exec-kpi-label">Current</div><div class="exec-kpi-val ${revTotal>=revAdopted?'good':'warn'}">${fmtK(revTotal)}</div></div>
+            <div class="exec-kpi"><div class="exec-kpi-label">Variance</div><div class="exec-kpi-val ${revTotal-revAdopted>=0?'good':'bad'}">${revTotal-revAdopted>=0?'+':''}${fmtK(revTotal-revAdopted)}</div></div>
+          </div>
+        </div>`;
+      }
     }
+
+    // Division cards
     html+=divCodes.map(divCode=>{
       const divCfg=DIV_CONFIG[divCode]||{name:divCode,photo:''};
-      const budget=divBudgetTotal(divCode,true), poCommit=divPOCommitment(divCode), remaining=budget-poCommit;
-      const pos=STATE.pos.filter(p=>p.fiscal!=='FY25'&&p.budgetSource!=='cip'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
-      let card=`<div class="exec-div-card"><div class="exec-div-header"><div style="display:flex;align-items:center;gap:12px"><img src="${divCfg.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover" onerror="this.style.display='none'"><div><div class="exec-div-name">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs</div></div></div></div>`;
-      if(cfg.showBudget) card+=`<div class="exec-kpi-row" style="margin-bottom:12px"><div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div><div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div></div>${budgetBar(poCommit,budget)}`;
+      const budget=divBudgetTotal(divCode,true);
+      const poCommit=divPOCommitment(divCode);
+      const remaining=budget-poCommit;
+      const pos=STATE.pos.filter(p=>p.fiscal===CURRENT_FY&&p.budgetSource!=='cip'&&(p.div===divCode||(p.multiAcct&&p.multiAcct.includes(divCode))));
+      const invoicedTotal=pos.reduce((s,p)=>s+App.getInvoicedTotal(p.poNum),0);
+
+      let card=`<div class="exec-div-card">
+        <div class="exec-div-header">
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="${divCfg.photo}" style="width:44px;height:44px;border-radius:10px;object-fit:cover" onerror="this.style.display='none'">
+            <div><div class="exec-div-name">${divCfg.label}</div><div style="font-size:11px;color:var(--text2)">${pos.length} active POs · ${CURRENT_FY}</div></div>
+          </div>
+        </div>`;
+
+      if(cfg.showBudget) card+=`
+        <div class="exec-kpi-row" style="margin-bottom:10px">
+          <div class="exec-kpi"><div class="exec-kpi-label">Budget</div><div class="exec-kpi-val">${fmtK(budget)}</div></div>
+          <div class="exec-kpi"><div class="exec-kpi-label">PO Commit</div><div class="exec-kpi-val warn">${fmtK(poCommit)}</div></div>
+          <div class="exec-kpi"><div class="exec-kpi-label">Balance</div><div class="exec-kpi-val ${remaining<0?'bad':'good'}">${fmtK(remaining)}</div></div>
+          <div class="exec-kpi"><div class="exec-kpi-label">Invoiced</div><div class="exec-kpi-val" style="color:var(--text2)">${fmtK(invoicedTotal)}</div></div>
+        </div>
+        ${budgetBar(poCommit,budget)}`;
+
+      // Matt: account detail
       if(id==='anderson'&&cfg.showDetailBudget){
         const acctRows=getBudgetForDivExec(divCode);
-        if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">Account Detail</div><div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Budget</th><th>PO Committed</th><th>Remaining</th><th></th></tr></thead><tbody>${acctRows.map(b=>{const committed=acctPOCommitment(divCode,b.acct);const bal=b.amt-committed;const nk=`${divCode}-${b.acct}`;return `<tr><td><strong>${b.acct}</strong></td><td>${b.desc}</td><td>${fmt(b.amt)}</td><td style="color:var(--warning)">${fmt(committed)}</td><td style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600">${fmt(bal)}</td><td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help">ℹ️</span>`:''}</td></tr>${notes[nk]?`<tr><td colspan="6" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`}).join('')}</tbody></table></div></div>`;
+        if(acctRows.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">Account Detail</div>
+          <div class="table-wrap"><table><thead><tr><th>Acct</th><th>Description</th><th style="text-align:right">Budget</th><th style="text-align:right">Committed</th><th style="text-align:right">Remaining</th><th></th></tr></thead>
+          <tbody>${acctRows.map(b=>{
+            const committed=acctPOCommitment(divCode,b.acct);
+            const bal=b.amt-committed;
+            const nk=`${divCode}-${b.acct}`;
+            return `<tr>
+              <td><strong>${b.acct}</strong></td><td style="font-size:12px">${b.desc}</td>
+              <td style="text-align:right">${fmt(b.amt)}</td>
+              <td style="text-align:right;color:var(--warning)">${fmt(committed)}</td>
+              <td style="text-align:right;font-weight:600;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
+              <td>${notes[nk]?`<span title="${notes[nk]}" style="cursor:help;color:var(--info)">ℹ️</span>`:''}</td>
+            </tr>
+            ${notes[nk]?`<tr><td colspan="6" style="background:#fffbeb;font-size:11px;color:var(--warning);padding:6px 12px">${notes[nk]}</td></tr>`:''}`;
+          }).join('')}</tbody></table></div></div>`;
       }
-      if(pos.length) card+=`<div style="margin-top:12px;border-top:1px solid var(--bg2);padding-top:10px">
-        <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px">POs (${pos.length})</div>
-        ${pos.map(p=>{
-          const invoiced=App.getInvoicedTotal(p.poNum);
-          const bal=p.start-invoiced;
-          return `<div style="padding:4px 0;border-bottom:1px solid var(--bg2)">
-            <div style="display:flex;justify-content:space-between;font-size:12px">
-              <span style="display:flex;align-items:center;gap:6px">
-                <span style="color:var(--text2)">${p.poNum}</span>
-                <span>${p.vendor.length>24?p.vendor.slice(0,24)+'…':p.vendor}</span>
-                ${tagHTML(p.code||'')}
-              </span>
-              <span style="color:${bal<0?'var(--danger)':'var(--success)'};font-weight:600;white-space:nowrap">${fmt(bal)}</span>
-            </div>
-            ${p.start>0?`<div style="margin-top:2px">${budgetBar(invoiced,p.start)}</div>`:''}
-          </div>`;
-        }).join('')}
-      </div>`;
-      return card+'</div>';
+
+      // POs list — compact, all shown
+      if(pos.length) card+=`<div style="margin-top:14px;border-top:1px solid var(--bg2);padding-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">POs — ${pos.length}</div>
+        <div class="table-wrap"><table><thead><tr><th>PO</th><th>Vendor</th><th>Code</th><th style="text-align:right">Starting</th><th style="text-align:right">Invoiced</th><th style="text-align:right">Balance</th></tr></thead>
+        <tbody>${pos.map(p=>{
+          const inv=App.getInvoicedTotal(p.poNum);
+          const bal=p.start-inv;
+          return `<tr>
+            <td style="font-size:11px;font-weight:600">${p.poNum}</td>
+            <td style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}</td>
+            <td>${tagHTML(p.code||'')}</td>
+            <td style="text-align:right;font-size:12px">${fmt(p.start)}</td>
+            <td style="text-align:right;font-size:12px;color:var(--warning)">${fmt(inv)}</td>
+            <td style="text-align:right;font-size:12px;font-weight:600;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
+          </tr>`;
+        }).join('')}</tbody></table></div></div>`;
+
+      card+='</div>';
+      return card;
     }).join('');
 
-    // PbP / ParkMobile section for John
+    // PbP/ParkMobile for John
     if(cfg.showPbP){
-      const pbpInvs=STATE.invoices.filter(i=>(i.vendor||'').toLowerCase().includes('paybyphone'));
-      const pmInvs=STATE.invoices.filter(i=>(i.vendor||'').toLowerCase().includes('parkmobile'));
-      const fy26pbp=pbpInvs.filter(i=>i.invDate>='2025-10-01');
-      const fy26pm=pmInvs.filter(i=>i.invDate>='2025-10-01');
-      html+=`<div class="card" style="margin-top:20px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:14px">📱 PayByPhone &amp; ParkMobile — FY26 Summary</div>
-        <div class="stats-grid" style="margin-bottom:14px">
-          <div class="stat-card info"><div class="stat-label">PayByPhone YTD</div><div class="stat-value">${fmtK(fy26pbp.reduce((s,i)=>s+(i.amount||0),0))}</div><div class="stat-sub">${fy26pbp.length} invoices</div></div>
-          <div class="stat-card success"><div class="stat-label">ParkMobile YTD</div><div class="stat-value">${fmtK(fy26pm.reduce((s,i)=>s+(i.amount||0),0))}</div><div class="stat-sub">${fy26pm.length} invoices</div></div>
+      const pbpInvs=STATE.invoices.filter(i=>(i.vendor||'').toLowerCase().includes('paybyphone')&&(i.invDate||'')>=fyStartDate(CURRENT_FY));
+      const pmInvs=STATE.invoices.filter(i=>(i.vendor||'').toLowerCase().includes('parkmobile')&&(i.invDate||'')>=fyStartDate(CURRENT_FY));
+      html+=`<div class="card" style="margin-top:16px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:12px">📱 PayByPhone &amp; ParkMobile — ${CURRENT_FY} YTD</div>
+        <div class="stats-grid" style="margin-bottom:12px">
+          <div class="stat-card info"><div class="stat-label">PayByPhone</div><div class="stat-value">${fmtK(pbpInvs.reduce((s,i)=>s+(i.amount||0),0))}</div><div class="stat-sub">${pbpInvs.length} invoices</div></div>
+          <div class="stat-card success"><div class="stat-label">ParkMobile</div><div class="stat-value">${fmtK(pmInvs.reduce((s,i)=>s+(i.amount||0),0))}</div><div class="stat-sub">${pmInvs.length} invoices</div></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-          <div>
-            <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">PayByPhone — Recent</div>
-            ${fy26pbp.slice(-6).reverse().map(i=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)">
-              <span style="color:var(--text2)">${i.invDate?.slice(0,7)||'—'}</span>
-              <span><strong>${fmt(i.amount||0)}</strong></span>
-              <span class="tag ${Admin._statusColor?Admin._statusColor(i.status):'tag-gray'}" style="font-size:9px">${i.status}</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          ${[{label:'PayByPhone',invs:pbpInvs},{label:'ParkMobile',invs:pmInvs}].map(({label,invs})=>`
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px">${label} — Recent</div>
+              ${invs.slice(-5).reverse().map(i=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)">
+                <span style="color:var(--text2)">${i.invDate?.slice(0,7)||'—'}</span>
+                <strong>${fmt(i.amount||0)}</strong>
+                <span class="tag ${Admin._statusColor(i.status)}" style="font-size:9px">${i.status}</span>
+              </div>`).join('')}
             </div>`).join('')}
-          </div>
-          <div>
-            <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">ParkMobile — Recent</div>
-            ${fy26pm.slice(-6).reverse().map(i=>`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid var(--bg2)">
-              <span style="color:var(--text2)">${i.invDate?.slice(0,7)||'—'}</span>
-              <span><strong>${fmt(i.amount||0)}</strong></span>
-              <span class="tag ${Admin._statusColor?Admin._statusColor(i.status):'tag-gray'}" style="font-size:9px">${i.status}</span>
-            </div>`).join('')}
-          </div>
         </div>
       </div>`;
     }
