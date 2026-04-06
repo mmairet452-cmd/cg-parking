@@ -1153,6 +1153,16 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
             <button class="btn btn-primary" onclick="Admin.changePassword()">Update Password</button>
           </div>
           <div class="card">
+            <div class="card-title">🔧 Data Integrity</div>
+            <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Fix duplicate records caused by multiple seed runs or imports.</p>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-secondary" onclick="App.dedupAllData()">🔄 Remove Duplicate POs</button>
+              <button class="btn btn-secondary" onclick="Admin.reseedPOs()">♻️ Re-seed POs from defaults</button>
+              <button class="btn btn-secondary" onclick="Admin.reseedBudget()">♻️ Re-seed Budget from defaults</button>
+            </div>
+            <div id="integrityMsg" style="font-size:12px;margin-top:8px"></div>
+          </div>
+          <div class="card">
             <div class="card-title">Alert Thresholds</div>
             <div class="form-group"><label>Contract Expiry Alerts (days before)</label><input type="text" id="expiryDays" class="form-input" value="30, 60, 90"></div>
             <div class="form-group"><label>Low Balance Alerts (%)</label><input type="text" id="lowBalancePct" class="form-input" value="50, 25"></div>
@@ -1165,6 +1175,8 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
             <button class="btn btn-green btn-sm" onclick="Admin.openAddSupervisor()" style="margin-bottom:14px">+ Add Supervisor</button>
             <div id="supervisorListAdmin"></div>
           </div>
+          <div class="card">
+            <div class="card-title">PO Code Reference</div>
             <table style="font-size:12px">
               <thead><tr><th>Code</th><th>Type</th><th>Limit</th></tr></thead>
               <tbody>
@@ -2231,25 +2243,42 @@ const App = {
       SDB.getAll('settings'),
     ]);
 
-    // Seed budget if empty
+    // ── BUDGET: seed if empty, else use stored ──────────────────────
     if (budget.length === 0) {
       showLoading('Setting up FY26 budget…');
       await SDB.replaceAll('budget_accounts', BUDGET_SEED);
-      STATE.budget = BUDGET_SEED;
+      STATE.budget = BUDGET_SEED.map(b=>({...b}));
     } else {
       STATE.budget = budget;
     }
 
-    // Seed POs if empty
+    // ── POs: DEDUP before storing — key = poNum ─────────────────────
     if (pos.length === 0) {
       showLoading('Loading POs…');
       await SDB.replaceAll('purchase_orders', PO_SEED);
       STATE.pos = PO_SEED.map(p=>({...p}));
     } else {
-      STATE.pos = pos;
+      // Deduplicate by poNum — keep only the LAST record per poNum
+      const seen = new Map();
+      for (const p of pos) {
+        const key = p.poNum;
+        if (key) seen.set(key, p); // later ones overwrite
+      }
+      // If duplicates found, clean them up in Supabase
+      if (seen.size < pos.length) {
+        console.warn(`Dedup: ${pos.length} POs → ${seen.size} unique. Cleaning Supabase...`);
+        showLoading('Cleaning duplicate POs…');
+        // Delete all, re-insert unique set
+        await SDB.replaceAll('purchase_orders', [...seen.values()].map(p=>{
+          const {_id,...rest}=p; return rest;
+        }));
+        STATE.pos = await SDB.getAll('purchase_orders');
+      } else {
+        STATE.pos = pos;
+      }
     }
 
-    // Seed invoices if empty — import from INVOICE_SEED
+    // ── INVOICES: seed if empty ──────────────────────────────────────
     if (invoices.length === 0) {
       showLoading('Importing invoices…');
       const batches = [];
@@ -2266,7 +2295,6 @@ const App = {
     STATE.pendingOrders = pendingOrders;
     STATE.changeRequests = changeRequests;
 
-    // Supervisors, CIP projects, revenue from settings
     const supRow = allSettings.find(r=>r.key==='supervisors');
     STATE.supervisors = supRow ? supRow.value : [];
     const cipRow = allSettings.find(r=>r.key==='cipProjects');
@@ -2274,8 +2302,25 @@ const App = {
     const revRow = allSettings.find(r=>r.key==='revenue');
     STATE.revenue = revRow ? revRow.value : [];
 
-    // Recalculate PO balances from invoices (source of truth)
     App.recalcPOBalances();
+  },
+
+  // Manual dedup tool — call from settings
+  async dedupAllData() {
+    showLoading('Deduplicating POs…');
+    const pos = await SDB.getAll('purchase_orders');
+    const seen = new Map();
+    for (const p of pos) { if(p.poNum) seen.set(p.poNum, p); }
+    if (seen.size < pos.length) {
+      await SDB.replaceAll('purchase_orders', [...seen.values()].map(p=>{const{_id,...r}=p;return r;}));
+      STATE.pos = await SDB.getAll('purchase_orders');
+      showToast(`Cleaned ${pos.length - seen.size} duplicate POs.`, 'success');
+    } else {
+      showToast('No duplicate POs found.', 'success');
+    }
+    App.recalcPOBalances();
+    hideLoading();
+    Admin.renderPOTable(); Admin.renderDashboard(); Admin.renderBudgetOverview();
   },
 
   // Sum of active invoices for a PO within the PO's fiscal year
@@ -2582,61 +2627,137 @@ const Admin = {
     const sortBy=$('budgetSortBy')?.value||'division';
     const divF=$('budgetDivFilter2')?.value||'';
     const showHidden=$('budgetShowHidden')?.checked||false;
-    let budget=STATE.budget.filter(b=>(!divF||b.div===divF) && (showHidden||!b.hideFromTotals));
     const el=$('budgetOverviewContent'); if(!el) return;
 
+    // Helper: get POs that commit to a specific div+acct
+    const getPOsForAcct=(div,acct)=>{
+      return getPOsForFY(CURRENT_FY).filter(p=>{
+        const dist=parsePODistribution(p);
+        return dist.some(d=>d.div===div && String(d.acct)===String(acct));
+      });
+    };
+
+    // Build one account line with expandable PO list
+    const buildAcctRow=(b)=>{
+      const committed=acctPOCommitment(b.div,b.acct);
+      const bal=b.amt-committed;
+      const hidden=b.hideFromTotals;
+      const poHits=getPOsForAcct(b.div,b.acct);
+      const rowId=`acct_${b.div}_${b.acct}`;
+      const hasPOs=poHits.length>0;
+      const negStyle=bal<0?'color:var(--danger);font-weight:700':'color:var(--success);font-weight:700';
+
+      return `
+        <div style="border-bottom:1px solid #f0ede8;${hidden?'opacity:.55':''}">
+          <div style="display:grid;grid-template-columns:60px 70px 1fr 120px 120px 110px 110px;gap:6px;align-items:center;padding:8px 4px;cursor:${hasPOs?'pointer':'default'}"
+               onclick="${hasPOs?`Admin.toggleAcctDrilldown('${rowId}')`:''}" title="${hasPOs?'Click to see POs':''}">
+            <span class="tag tag-gray" style="font-size:10px">${b.div}</span>
+            <span style="font-weight:600;font-size:12px">${b.acct}</span>
+            <span style="color:var(--text2);font-size:12px">
+              ${b.desc}${hidden?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}
+              ${hasPOs?'<span style="color:var(--info);font-size:10px;margin-left:4px">▼ '+poHits.length+' PO'+(poHits.length>1?'s':'')+'</span>':''}
+            </span>
+            <span style="text-align:right;font-size:12px">${fmt(b.amt)}</span>
+            <span style="text-align:right;font-size:12px;color:${committed>0?'var(--warning)':'var(--text3)'}">${fmt(committed)}</span>
+            <span style="text-align:right;font-size:12px;${negStyle}">${fmt(bal)}</span>
+            <span style="display:flex;gap:4px">
+              <button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();Admin.openEditBudgetLine('${b._id||''}')">✏️</button>
+              ${hasPOs?`<button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();Admin.toggleAcctDrilldown('${rowId}')">🔍</button>`:''}
+            </span>
+          </div>
+          <!-- PO drill-down (hidden by default) -->
+          <div id="${rowId}" style="display:none;background:#f9f8f6;border-top:1px solid var(--bg2);padding:8px 12px 8px 24px">
+            <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">POs committed to ${b.div} — ${b.acct}:</div>
+            <table style="width:100%;font-size:11px">
+              <thead><tr>
+                <th style="text-align:left;padding:3px 6px;color:var(--text3)">PO#</th>
+                <th style="text-align:left;padding:3px 6px;color:var(--text3)">Vendor</th>
+                <th style="text-align:left;padding:3px 6px;color:var(--text3)">Code</th>
+                <th style="text-align:right;padding:3px 6px;color:var(--text3)">PO Total</th>
+                <th style="text-align:right;padding:3px 6px;color:var(--text3)">This Div/Acct</th>
+                <th style="text-align:right;padding:3px 6px;color:var(--text3)">Invoiced</th>
+                <th style="text-align:right;padding:3px 6px;color:var(--text3)">PO Balance</th>
+                <th style="padding:3px 6px"></th>
+              </tr></thead>
+              <tbody>
+              ${poHits.map(p=>{
+                const dist=parsePODistribution(p);
+                const divShare=dist.filter(d=>d.div===b.div&&String(d.acct)===String(b.acct)).reduce((s,d)=>s+d.amount,0);
+                const invoiced=App.getInvoicedTotal(p.poNum);
+                const poBal=p.start-invoiced;
+                return `<tr style="border-bottom:1px solid var(--bg2)">
+                  <td style="padding:4px 6px;font-weight:600">${p.poNum}</td>
+                  <td style="padding:4px 6px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}</td>
+                  <td style="padding:4px 6px">${tagHTML(p.code||'')}</td>
+                  <td style="text-align:right;padding:4px 6px">${fmt(p.start)}</td>
+                  <td style="text-align:right;padding:4px 6px;color:var(--warning);font-weight:600">${fmt(divShare)}</td>
+                  <td style="text-align:right;padding:4px 6px;color:var(--text2)">${fmt(invoiced)}</td>
+                  <td style="text-align:right;padding:4px 6px;font-weight:600;color:${poBal<0?'var(--danger)':'var(--success)'}">${fmt(poBal)}</td>
+                  <td style="padding:4px 6px"><button class="btn btn-secondary btn-xs" onclick="Admin.openNewPOModal('${p.poNum}')">Edit</button></td>
+                </tr>`;
+              }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    };
+
     if(sortBy==='division'){
-      const divs=[...new Set(STATE.budget.filter(b=>!divF||b.div===divF).map(b=>b.div))].sort();
+      const divs=[...new Set(STATE.budget.map(b=>b.div))].filter(d=>!divF||d===divF).sort();
       el.innerHTML=divs.map(div=>{
         const allRows=STATE.budget.filter(b=>b.div===div);
-        const visRows=budget.filter(b=>b.div===div);
-        const total=visRows.reduce((s,b)=>s+b.amt,0);
+        const visRows=allRows.filter(b=>showHidden||!b.hideFromTotals);
+        const opBudget=visRows.reduce((s,b)=>s+b.amt,0);
         const poCommit=divPOCommitment(div);
+        const bal=opBudget-poCommit;
         const hiddenCount=allRows.filter(b=>b.hideFromTotals).length;
         const cfg=DIV_CONFIG[div]||{};
-        return `<div class="card">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
-            <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
-            <div style="flex:1">
-              <div style="font-weight:700">${div} — ${cfg.name||div}</div>
-              <div style="font-size:11px;color:var(--text2)">Budget: ${fmt(total)} | POs: ${fmt(poCommit)} | Balance: ${fmt(total-poCommit)}${hiddenCount?` | <span style="color:var(--text3)">${hiddenCount} line(s) hidden from exec</span>`:''}</div>
+        return `<div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px">
+              <img src="${cfg.photo||''}" style="width:36px;height:36px;border-radius:8px;object-fit:cover" onerror="this.style.display='none'">
+              <div>
+                <div style="font-weight:700">${div} — ${cfg.name||div}</div>
+                <div style="font-size:11px;color:var(--text2)">
+                  Budget: <strong>${fmt(opBudget)}</strong> &nbsp;|&nbsp;
+                  PO Commit: <strong style="color:${poCommit>0?'var(--warning)':'var(--text2)'}">${fmt(poCommit)}</strong> &nbsp;|&nbsp;
+                  Balance: <strong style="color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</strong>
+                  ${hiddenCount?`&nbsp;|&nbsp;<span style="color:var(--text3)">${hiddenCount} hidden from exec</span>`:''}
+                </div>
+              </div>
             </div>
+            <button class="btn btn-secondary btn-xs" onclick="Admin.openAddBudgetLine('${div}')">+ Add Line</button>
           </div>
-          <div style="display:grid;grid-template-columns:60px 70px 1fr 110px 110px 100px 80px;gap:6px;padding:6px 0;border-bottom:1px solid var(--bg2);font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text2)">
-            <span>Div</span><span>Account</span><span>Description</span><span style="text-align:right">Budget</span><span style="text-align:right">PO Commit</span><span style="text-align:right">Balance</span><span>Actions</span>
+          <!-- Column headers -->
+          <div style="display:grid;grid-template-columns:60px 70px 1fr 120px 120px 110px 110px;gap:6px;padding:4px 4px 6px;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">
+            <span>Div</span><span>Acct</span><span>Description</span>
+            <span style="text-align:right">Budget</span><span style="text-align:right">PO Commit</span>
+            <span style="text-align:right">Balance</span><span></span>
           </div>
-          ${allRows.filter(b=>showHidden||!b.hideFromTotals).map(b=>{
-            const committed=acctPOCommitment(b.div,b.acct);
-            const bal=b.amt-committed;
-            const hidden=b.hideFromTotals;
-            return `<div style="display:grid;grid-template-columns:60px 70px 1fr 110px 110px 100px 80px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f5f3ef;${hidden?'opacity:.55':''}">
-              <span class="tag tag-gray" style="font-size:10px">${b.div}</span>
-              <span style="font-weight:600;font-size:12px">${b.acct}</span>
-              <span style="color:var(--text2);font-size:12px">${b.desc}${hidden?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}</span>
-              <span style="text-align:right;font-weight:600;font-size:12px">${fmt(b.amt)}</span>
-              <span style="text-align:right;color:var(--text2);font-size:12px">${fmt(committed)}</span>
-              <span style="text-align:right;font-weight:600;font-size:12px;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</span>
-              <span><button class="btn btn-secondary btn-xs" onclick="Admin.openEditBudgetLine('${b._id}')">✏️ Edit</button></span>
-            </div>`;
-          }).join('')}
+          ${visRows.map(b=>buildAcctRow(b)).join('')}
+          ${hiddenCount&&!showHidden?`<div style="font-size:11px;color:var(--text3);padding:6px 4px">${hiddenCount} line(s) hidden from exec totals — toggle "Show hidden" to view</div>`:''}
+          ${showHidden?allRows.filter(b=>b.hideFromTotals).map(b=>buildAcctRow(b)).join(''):''}
         </div>`;
       }).join('');
     } else {
-      const sorted=[...budget].sort((a,b)=>a.acct.localeCompare(b.acct));
-      el.innerHTML=`<div class="table-wrap"><table><thead><tr><th>Account</th><th>Description</th><th>Division</th><th style="text-align:right">Budget</th><th style="text-align:right">PO Commit</th><th style="text-align:right">Balance</th><th>Hidden</th><th>Edit</th></tr></thead><tbody>
-        ${sorted.map(b=>{const committed=acctPOCommitment(b.div,b.acct);const bal=b.amt-committed;
-        return `<tr style="${b.hideFromTotals?'opacity:.6':''}">
-          <td><strong>${b.acct}</strong></td>
-          <td style="color:var(--text2)">${b.desc}</td>
-          <td><span class="tag tag-gray" style="font-size:10px">${b.div}</span></td>
-          <td style="text-align:right">${fmt(b.amt)}</td>
-          <td style="text-align:right;color:var(--text2)">${fmt(committed)}</td>
-          <td style="text-align:right;font-weight:700;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
-          <td>${b.hideFromTotals?'<span class="tag tag-gray" style="font-size:10px">hidden</span>':''}</td>
-          <td><button class="btn btn-secondary btn-xs" onclick="Admin.openEditBudgetLine('${b._id}')">✏️</button></td>
-        </tr>`;}).join('')}
-      </tbody></table></div>`;
+      // Sort by account
+      const allBudget=STATE.budget.filter(b=>!divF||b.div===divF).filter(b=>showHidden||!b.hideFromTotals);
+      const sorted=[...allBudget].sort((a,b)=>String(a.acct).localeCompare(String(b.acct)));
+      el.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)">
+        <div style="display:grid;grid-template-columns:60px 70px 1fr 120px 120px 110px 110px;gap:6px;padding:10px 4px;border-bottom:2px solid var(--border);font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3)">
+          <span>Div</span><span>Acct</span><span>Description</span>
+          <span style="text-align:right">Budget</span><span style="text-align:right">PO Commit</span>
+          <span style="text-align:right">Balance</span><span></span>
+        </div>
+        ${sorted.map(b=>buildAcctRow(b)).join('')}
+      </div>`;
     }
+  },
+
+  toggleAcctDrilldown(rowId) {
+    const el=$(rowId);
+    if(!el) return;
+    el.style.display = el.style.display==='none' ? 'block' : 'none';
   },
 
   openEditBudgetLine(supaId) {
@@ -3795,6 +3916,29 @@ const Admin = {
     ['oldPass','newPass','confirmPass'].forEach(id=>$(id).value='');
   },
   saveThresholds() { showToast('Thresholds saved ✓','success'); },
+
+  async reseedPOs() {
+    if(!confirm('Replace ALL POs with the default FY26 seed data? This will overwrite any manual changes to POs.')) return;
+    showLoading('Re-seeding POs…');
+    await SDB.replaceAll('purchase_orders', PO_SEED);
+    STATE.pos = await SDB.getAll('purchase_orders');
+    App.recalcPOBalances();
+    hideLoading();
+    Admin.renderPOTable(); Admin.renderDashboard(); Admin.renderBudgetOverview();
+    showToast('POs re-seeded from defaults ✓', 'success');
+    if($('integrityMsg')) $('integrityMsg').textContent = `POs reset to ${PO_SEED.length} default records.`;
+  },
+
+  async reseedBudget() {
+    if(!confirm('Replace ALL budget lines with the default FY26 seed data?')) return;
+    showLoading('Re-seeding budget…');
+    await SDB.replaceAll('budget_accounts', BUDGET_SEED);
+    STATE.budget = await SDB.getAll('budget_accounts');
+    hideLoading();
+    Admin.renderBudgetOverview(); Admin.renderDashboard();
+    showToast('Budget re-seeded from defaults ✓', 'success');
+    if($('integrityMsg')) $('integrityMsg').textContent = `Budget reset to ${BUDGET_SEED.length} default lines.`;
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════
