@@ -1467,7 +1467,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         </div>
         <div id="poAccountLines"></div>
         <div class="simple-notice" style="margin-top:8px;font-size:11px">
-          If distribution is unknown, leave blank and mark as "Needs Budget Link".
+          If distribution is unknown, leave blank and mark as "Needs Budget Link". Nickname is optional — use it for custom labels like "Elevator Maint" or "LAZ Contract".
         </div>
         <label class="toggle-label" style="margin-top:8px">
           <input type="checkbox" id="poTricky"> Mark as "Needs Budget Link" (distribution unknown)
@@ -1633,6 +1633,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         <input type="text" id="editBudgetDesc" class="form-input">
       </div>
       <div class="form-group">
+        <label>Account Nickname <span style="color:var(--text3);font-weight:400">(optional — your custom label)</span></label>
+        <input type="text" id="editBudgetNickname" class="form-input" placeholder="e.g. Elevator Maintenance, LAZ Contract…">
+      </div>
+      <div class="form-group">
         <label>Budget Amount ($) *</label>
         <input type="number" id="editBudgetAmt" class="form-input" step="0.01">
       </div>
@@ -1680,6 +1684,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <div class="form-group">
         <label>Description *</label>
         <input type="text" id="addBudgetDesc" class="form-input" placeholder="e.g. Misc Exp - Other">
+      </div>
+      <div class="form-group">
+        <label>Account Nickname <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+        <input type="text" id="addBudgetNickname" class="form-input" placeholder="e.g. Elevator Maintenance, LAZ Contract…">
       </div>
       <div class="form-group">
         <label>Budget Amount ($) *</label>
@@ -2063,6 +2071,20 @@ function budgetBar(used,total) {
 function tagHTML(code) {
   const map={'CNT1':'tag-blue','CNT2':'tag-purple','PGB2':'tag-purple','PBK2':'tag-orange','PBK1':'tag-orange','SPO1':'tag-green','SPO2':'tag-yellow','SLS1':'tag-green'};
   return `<span class="tag ${map[code]||'tag-gray'}">${code||'—'}</span>`;
+}
+
+// Display account with optional nickname
+function acctLabel(acct, divOrBudget, desc) {
+  // Try to find nickname from budget data
+  let nickname = '';
+  if (typeof divOrBudget === 'string') {
+    const bl = STATE.budget.find(b=>b.div===divOrBudget && String(b.acct)===String(acct));
+    nickname = bl?.nickname || '';
+  } else if (divOrBudget && typeof divOrBudget === 'object') {
+    nickname = divOrBudget.nickname || '';
+  }
+  if (nickname) return `<span title="${desc||acct}">${acct} <span style="color:var(--coral);font-style:italic;font-size:11px">(${nickname})</span></span>`;
+  return acct;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2607,7 +2629,7 @@ const Admin = {
         const lineBal=b.amt-committed;
         rows.push(`<tr style="${b.hideFromTotals?'opacity:.45':''}">
           <td style="padding:5px 12px;font-size:11px;color:var(--text3)">${b.div}</td>
-          <td style="padding:5px 12px;font-size:12px;font-weight:600">${b.acct}</td>
+          <td style="padding:5px 12px;font-size:12px;font-weight:600">${b.acct}${b.nickname?` <span style="color:var(--coral);font-style:italic;font-size:10px">(${b.nickname})</span>`:''}</td>
           <td style="padding:5px 12px;font-size:12px;color:var(--text2)">${b.desc}${b.hideFromTotals?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}</td>
           <td style="text-align:right;padding:5px 12px;font-size:12px">${fmt(b.amt)}</td>
           <td style="text-align:right;padding:5px 12px;font-size:12px;color:var(--text2)">${fmt(committed)}</td>
@@ -2652,7 +2674,7 @@ const Admin = {
           <div style="display:grid;grid-template-columns:60px 70px 1fr 120px 120px 110px 110px;gap:6px;align-items:center;padding:8px 4px;cursor:${hasPOs?'pointer':'default'}"
                onclick="${hasPOs?`Admin.toggleAcctDrilldown('${rowId}')`:''}" title="${hasPOs?'Click to see POs':''}">
             <span class="tag tag-gray" style="font-size:10px">${b.div}</span>
-            <span style="font-weight:600;font-size:12px">${b.acct}</span>
+            <span style="font-weight:600;font-size:12px">${b.acct}${b.nickname?` <span style="color:var(--coral);font-style:italic;font-size:10px">(${b.nickname})</span>`:''}</span>
             <span style="color:var(--text2);font-size:12px">
               ${b.desc}${hidden?'<span class="tag tag-gray" style="font-size:9px;margin-left:4px">hidden</span>':''}
               ${hasPOs?'<span style="color:var(--info);font-size:10px;margin-left:4px">▼ '+poHits.length+' PO'+(poHits.length>1?'s':'')+'</span>':''}
@@ -2766,6 +2788,7 @@ const Admin = {
     $('editBudgetDiv').value=b.div;
     $('editBudgetAcct').value=b.acct;
     $('editBudgetDesc').value=b.desc||'';
+    $('editBudgetNickname').value=b.nickname||'';
     $('editBudgetAmt').value=b.amt;
     $('editBudgetHide').checked=!!b.hideFromTotals;
     $('editBudgetErr').style.display='none';
@@ -2777,7 +2800,7 @@ const Admin = {
     const amt=parseFloat($('editBudgetAmt').value);
     if(isNaN(amt)){$('editBudgetErr').textContent='Invalid amount.';$('editBudgetErr').style.display='block';return;}
     const b=STATE.budget.find(x=>x._id===supaId); if(!b) return;
-    const updated={...b, desc:$('editBudgetDesc').value, amt, hideFromTotals:$('editBudgetHide').checked};
+    const updated={...b, desc:$('editBudgetDesc').value, nickname:$('editBudgetNickname').value.trim()||'', amt, hideFromTotals:$('editBudgetHide').checked};
     showLoading('Saving…');
     await SDB.update('budget_accounts', supaId, updated);
     STATE.budget=await SDB.getAll('budget_accounts');
@@ -2790,7 +2813,7 @@ const Admin = {
   },
 
   openAddBudgetLine() {
-    ['addBudgetDiv','addBudgetAcct','addBudgetDesc','addBudgetAmt'].forEach(id=>$(id).value='');
+    ['addBudgetDiv','addBudgetAcct','addBudgetDesc','addBudgetAmt','addBudgetNickname'].forEach(id=>$(id).value='');
     $('addBudgetHide').checked=false;
     $('addBudgetErr').style.display='none';
     $('addBudgetModal').style.display='flex';
@@ -2800,7 +2823,7 @@ const Admin = {
     const div=$('addBudgetDiv').value, acct=$('addBudgetAcct').value.trim();
     const desc=$('addBudgetDesc').value.trim(), amt=parseFloat($('addBudgetAmt').value);
     if(!div||!acct||!desc||isNaN(amt)){$('addBudgetErr').textContent='All fields required.';$('addBudgetErr').style.display='block';return;}
-    const newLine={div, acct, desc, amt, hideFromTotals:$('addBudgetHide').checked};
+    const newLine={div, acct, desc, amt, nickname:$('addBudgetNickname').value.trim()||'', hideFromTotals:$('addBudgetHide').checked};
     showLoading('Saving…');
     await SDB.insert('budget_accounts', newLine);
     STATE.budget=await SDB.getAll('budget_accounts');
@@ -2926,7 +2949,7 @@ const Admin = {
         <td>${fmt(p.start)}</td>
         <td><div>${fmt(p.balance)}</div>${!isFY25?budgetBar(p.start-p.balance,p.start):''}</td>
         <td style="color:var(--text2);font-size:11px">${p.type||p.code||'—'}</td>
-        <td style="font-size:11px">${p.acct||'<span style="color:var(--text3)">Multi</span>'}</td>
+        <td style="font-size:11px">${p.acct?(p.acctNickname?`${p.acct} <span style="color:var(--coral);font-style:italic;font-size:10px">(${p.acctNickname})</span>`:acctLabel(p.acct,p.div)):'<span style="color:var(--text3)">Multi</span>'}</td>
         <td style="font-size:11px;color:var(--text2)">${p.date||'—'}</td>
         <td>${isFY25?'<span class="fy25-warn">FY25</span>':p.tricky?'<span class="tag tag-orange" style="font-size:10px">🔗 Needs Link</span>':'<span class="tag tag-green" style="font-size:10px">Active</span>'}</td>
         <td><div style="display:flex;gap:4px">
@@ -2964,12 +2987,13 @@ const Admin = {
         $('poAccountLinesSection').style.display='none';
       }
       $('poFY25warn').style.display=po.fiscal==='FY25'?'block':'none';
-      if(po.div&&po.acct) Admin.addPOAccountLine(po.div,po.acct,po.start);
+      if(po.div&&po.acct) Admin.addPOAccountLine(po.div,po.acct,po.start,po.acctNickname||'');
       else if(po.multiAcct){
         // Parse multi-account lines back into form rows
-        po.multiAcct.split(',').forEach(part=>{
+        const nicks = (po.multiNicknames||'').split('|');
+        po.multiAcct.split(',').forEach((part,idx)=>{
           const m=part.trim().match(/(\d+)-(\w+):([\d.]+)/);
-          if(m) Admin.addPOAccountLine(m[1],m[2],parseFloat(m[3]));
+          if(m) Admin.addPOAccountLine(m[1],m[2],parseFloat(m[3]),nicks[idx]||'');
         });
         if(!$('poAccountLines').children.length) Admin.addPOAccountLine();
       } else {
@@ -2999,15 +3023,16 @@ const Admin = {
     else {$('poFY25warn').style.display='none';}
   },
 
-  addPOAccountLine(div='',acct='',amt='') {
+  addPOAccountLine(div='',acct='',amt='',nickname='') {
     const i=Admin._poAccountLineCount++;
     const divOpts=Object.entries(DIV_CONFIG).map(([k,v])=>`<option value="${k}" ${div===k?'selected':''}>${k} ${v.name}</option>`).join('');
     const el=document.createElement('div');
-    el.style.cssText='display:grid;grid-template-columns:130px 90px 1fr 110px 30px;gap:6px;align-items:center;margin-bottom:8px';
+    el.style.cssText='display:grid;grid-template-columns:130px 90px 1fr 110px 110px 30px;gap:6px;align-items:center;margin-bottom:8px';
     el.innerHTML=`<select class="form-input" style="font-size:12px" id="paDiv_${i}"><option value="">Division</option>${divOpts}</select>
       <input type="text" class="form-input" style="font-size:12px" id="paAcct_${i}" placeholder="Acct #" value="${acct}">
       <input type="text" class="form-input" style="font-size:12px" id="paDesc_${i}" placeholder="Description">
       <input type="number" class="form-input" style="font-size:12px" id="paAmt_${i}" placeholder="Amount" value="${amt}">
+      <input type="text" class="form-input" style="font-size:12px" id="paNick_${i}" placeholder="Nickname" value="${nickname}" title="Optional account nickname">
       <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:20px;line-height:1">×</button>`;
     $('poAccountLines').appendChild(el);
   },
@@ -3024,12 +3049,15 @@ const Admin = {
     document.querySelectorAll('#poAccountLines > div').forEach(el=>{
       const d=el.querySelector('[id^=paDiv_]')?.value, a=el.querySelector('[id^=paAcct_]')?.value;
       const am=parseFloat(el.querySelector('[id^=paAmt_]')?.value)||0;
-      if(d||a) lines.push({div:d,acct:a,amt:am});
+      const nick=el.querySelector('[id^=paNick_]')?.value?.trim()||'';
+      if(d||a) lines.push({div:d,acct:a,amt:am,nickname:nick});
     });
     const po={poNum,vendor,code,fiscal,date,start,balance:start,
       displayLabel, budgetSource, cipProject,
       div:lines[0]?.div||null, acct:lines[0]?.acct||null,
+      acctNickname:lines[0]?.nickname||'',
       multiAcct:lines.length>1?lines.map(l=>`${l.div}-${l.acct}:${l.amt}`).join(', '):null,
+      multiNicknames:lines.length>1?lines.map(l=>l.nickname||'').join('|'):null,
       notes:$('poNotes').value, tricky:$('poTricky').checked,
       type:displayLabel || $('poType').selectedOptions[0]?.text||''};
     showLoading('Saving…');
@@ -3058,7 +3086,7 @@ const Admin = {
         <div><div class="stat-label">Vendor</div><div style="font-weight:600">${po.vendor}</div></div>
         <div><div class="stat-label">Code</div>${tagHTML(po.code)}</div>
         <div><div class="stat-label">FY</div>${po.fiscal}</div>
-        <div><div class="stat-label">Division</div>${po.div||'Multi'}</div>
+        <div><div class="stat-label">Division</div>${po.div||'Multi'}${po.acct?` · <span style="font-size:12px">${po.acct}</span>`:''}${po.acctNickname?` <span style="color:var(--coral);font-style:italic;font-size:11px">(${po.acctNickname})</span>`:''}</div>
       </div>
       <div class="form-row" style="margin-bottom:14px">
         <div><div class="stat-label">Starting</div><div style="font-weight:700;font-size:18px">${fmt(po.start)}</div></div>
@@ -4001,7 +4029,7 @@ const Supervisor = {
           <div style="text-align:right"><div style="font-weight:700;font-size:18px;color:var(--success)">${fmt(p.balance)}</div><div style="font-size:11px;color:var(--text2)">of ${fmt(p.start)}</div></div>
         </div>
         ${!isFY25?budgetBar(p.start-p.balance,p.start):''}
-        <div style="font-size:11px;color:var(--text2);margin-top:8px">${p.acct?'Acct: '+p.acct:''} ${p.div?'· Div: '+p.div:''}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:8px">${p.acct?'Acct: '+p.acct+(p.acctNickname?' <span style="color:var(--coral);font-style:italic">('+p.acctNickname+')</span>':''):''} ${p.div?'· Div: '+p.div:''}</div>
         ${isFY25?'<div class="warning-box" style="margin-top:8px;font-size:11px">Cannot roll — use FY26</div>':''}
         ${p.multiAcct?`<div style="font-size:10px;color:var(--text2);margin-top:6px;border-top:1px solid var(--bg2);padding-top:6px">${p.multiAcct}</div>`:''}
       </div>`;
@@ -4460,7 +4488,7 @@ const Executive = {
             const bal=b.amt-committed;
             const nk=`${divCode}-${b.acct}`;
             return `<tr>
-              <td><strong>${b.acct}</strong></td><td style="font-size:12px">${b.desc}</td>
+              <td><strong>${b.acct}</strong>${b.nickname?` <span style="color:var(--coral);font-style:italic;font-size:10px">(${b.nickname})</span>`:''}</td><td style="font-size:12px">${b.desc}</td>
               <td style="text-align:right">${fmt(b.amt)}</td>
               <td style="text-align:right;color:var(--warning)">${fmt(committed)}</td>
               <td style="text-align:right;font-weight:600;color:${bal<0?'var(--danger)':'var(--success)'}">${fmt(bal)}</td>
@@ -4479,7 +4507,7 @@ const Executive = {
           const bal=p.start-inv;
           return `<tr>
             <td style="font-size:11px;font-weight:600">${p.poNum}</td>
-            <td style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}</td>
+            <td style="font-size:11px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.vendor}">${p.vendor}${p.acctNickname?`<div style="color:var(--coral);font-style:italic;font-size:10px">${p.acctNickname}</div>`:''}</td>
             <td>${tagHTML(p.code||'')}</td>
             <td style="text-align:right;font-size:12px">${fmt(p.start)}</td>
             <td style="text-align:right;font-size:12px;color:var(--warning)">${fmt(inv)}</td>
