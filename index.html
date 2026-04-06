@@ -841,7 +841,10 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <div id="page-cipBudget" class="page">
         <div class="section-header">
           <span class="section-title">🏗️ CIP Budget — Capital Improvement Projects</span>
-          <button class="btn btn-primary btn-sm" onclick="Admin.openCIPModal()">+ Add Project</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" onclick="Admin.importCIPFromFile()">📥 Import CIP</button>
+            <button class="btn btn-primary btn-sm" onclick="Admin.openCIPModal()">+ Add Project</button>
+          </div>
         </div>
         <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Track capital projects separately from operating budget. Linked CIP POs auto-populate usage.</p>
         <div id="cipBudgetContent"></div>
@@ -964,6 +967,14 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
           <div id="blanketWarning" class="warning-box" style="display:none;margin-bottom:12px">
             ⚠️ <strong>Blanket PO / SPO2 Limit:</strong> This invoice exceeds the $1,000 per-order limit.
           </div>
+          <div id="invPOLineSection" style="display:none;margin-bottom:12px">
+            <div class="form-group">
+              <label id="invPOLineLabel">Account Line</label>
+              <select id="invPOLine" class="form-input">
+                <option value="">— Select PO first —</option>
+              </select>
+            </div>
+          </div>
           <div id="invPOBalance" class="info-box" style="display:none;margin-bottom:12px"></div>
           <div id="fy25InvWarn" class="warning-box" style="display:none;margin-bottom:12px">
             ⚠️ This PO is from FY25. Invoices received before September 1, 2026 will be noted. Cannot roll — please use FY26 POs.
@@ -1017,7 +1028,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
         </div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Invoice #</th><th>PO #</th><th>Vendor</th><th>Amount</th><th>Inv Date</th><th>Due Date</th><th>Status</th><th>Source</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Invoice #</th><th>PO #</th><th>Vendor</th><th>Amount</th><th>Inv Date</th><th>Due Date</th><th>Status</th><th>Div/Acct</th><th>Source</th><th>Actions</th></tr></thead>
             <tbody id="invoiceListBody"></tbody>
           </table>
         </div>
@@ -1122,21 +1133,38 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
       <!-- EXPORTS -->
       <div id="page-exports" class="page">
         <div class="section-header"><span class="section-title">📤 Export Reports</span></div>
-        <div class="card" style="max-width:480px">
-          <div class="form-group"><label>Division</label>
-            <select id="exportDivision" class="form-input">
-              <option value="">All Divisions</option>
-              <option value="8000">8000 Admin</option><option value="8001">8001 Enforcement</option>
-              <option value="8002">8002 Sustainability</option><option value="8100">8100 Garages Admin</option>
-              <option value="8200">8200 On Street</option><option value="8300">8300 Lots</option><option value="8800">8800 Trolley</option>
-            </select>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-title">📋 PO Data Export (CSV)</div>
+            <div class="form-group"><label>Division</label>
+              <select id="exportDivision" class="form-input">
+                <option value="">All Divisions</option>
+                <option value="8000">8000 Admin</option><option value="8001">8001 Enforcement</option>
+                <option value="8002">8002 Sustainability</option><option value="8100">8100 Garages Admin</option>
+                <option value="8200">8200 On Street</option><option value="8300">8300 Lots</option><option value="8800">8800 Trolley</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Fiscal Year</label>
+              <select id="exportYear" class="form-input">
+                <option value="">All Years</option><option>FY25</option><option>FY26</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="Admin.exportCSV()">📥 Export to CSV</button>
           </div>
-          <div class="form-group"><label>Fiscal Year</label>
-            <select id="exportYear" class="form-input">
-              <option value="">All Years</option><option>FY25</option><option>FY26</option>
-            </select>
+          <div class="card">
+            <div class="card-title">📝 SPO Tracking Form (Excel)</div>
+            <p style="font-size:12px;color:var(--text2);margin-bottom:14px">
+              Generate the City's SPO Tracking Form pre-filled with all invoices for a specific PO. 
+              The date column uses the invoice due date. File follows the official template format.
+            </p>
+            <div class="form-group"><label>Select PO *</label>
+              <select id="exportSPOSelect" class="form-input">
+                <option value="">— Select PO —</option>
+              </select>
+            </div>
+            <div id="exportSPOPreview" style="display:none;margin-bottom:12px"></div>
+            <button class="btn btn-primary" onclick="Admin.exportSPOFromSelect()">📥 Export SPO Tracking</button>
           </div>
-          <button class="btn btn-primary" onclick="Admin.exportCSV()">📥 Export to CSV</button>
         </div>
       </div>
 
@@ -1558,7 +1586,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
 <!-- PO DETAIL MODAL -->
 <div id="poDetailModal" class="modal-overlay" style="display:none">
-  <div class="modal" style="max-width:800px">
+  <div class="modal" style="max-width:960px">
     <div class="modal-header">
       <span class="modal-title" id="poDetailTitle">PO Detail</span>
       <button class="modal-close" onclick="App.closeModal('poDetailModal')">✕</button>
@@ -2513,6 +2541,8 @@ const App = {
 const Admin = {
   _poAccountLineCount: 0,
   _editPOSupaId: null,
+  _editContractId: null,
+  _origMultiAcct: null,
 
   async init() {
     Admin.renderDashboard();
@@ -2522,6 +2552,7 @@ const Admin = {
     Admin.renderBudgetOverview();
     Admin.renderSupervisorList();
     Admin.populatePOSelect();
+    Admin.populateExportSPO();
     Admin.updateBadges();
     setTimeout(()=>Admin.renderInvoiceHealth(), 800);
   },
@@ -2552,6 +2583,7 @@ const Admin = {
     if(page==='poLinking') Admin.renderPOLinking();
     if(page==='contracts') Admin.renderContracts();
     if(page==='settings') Admin.renderSupervisorList();
+    if(page==='exports') Admin.populateExportSPO();
   },
 
   filterChanged() { Admin.renderPOTable(); Admin.renderBudgetOverview(); },
@@ -2987,18 +3019,18 @@ const Admin = {
         $('poAccountLinesSection').style.display='none';
       }
       $('poFY25warn').style.display=po.fiscal==='FY25'?'block':'none';
-      if(po.div&&po.acct) Admin.addPOAccountLine(po.div,po.acct,po.start,po.acctNickname||'');
-      else if(po.multiAcct){
-        // Parse multi-account lines back into form rows
-        const nicks = (po.multiNicknames||'').split('|');
-        po.multiAcct.split(',').forEach((part,idx)=>{
-          const m=part.trim().match(/(\d+)-(\w+):([\d.]+)/);
-          if(m) Admin.addPOAccountLine(m[1],m[2],parseFloat(m[3]),nicks[idx]||'');
-        });
-        if(!$('poAccountLines').children.length) Admin.addPOAccountLine();
+      // Parse existing account lines using the main distribution parser
+      const dist=parsePODistribution(po);
+      const nicks=(po.multiNicknames||'').split('|');
+      if(dist.length>1){
+        dist.forEach((d,idx)=>Admin.addPOAccountLine(d.div,d.acct,d.amount,nicks[idx]||''));
+      } else if(dist.length===1){
+        Admin.addPOAccountLine(dist[0].div,dist[0].acct,dist[0].amount,po.acctNickname||nicks[0]||'');
       } else {
         Admin.addPOAccountLine();
       }
+      // Store original multiAcct for preservation if lines aren't changed
+      Admin._origMultiAcct=po.multiAcct||null;
     } else {
       $('newPOModalTitle').textContent='New Purchase Order';
       ['poId','poVendor','poStartingAmount','poNotes','poLinkedContract','poDisplayLabel','poCIPProject'].forEach(id=>{if($(id))$(id).value='';});
@@ -3006,6 +3038,7 @@ const Admin = {
       $('poPODate').value=today(); $('poTricky').checked=false;
       $('poBudgetSource').value='operating';
       $('poFY25warn').style.display='none';
+      Admin._origMultiAcct=null;
       Admin.addPOAccountLine();
     }
     $('newPOModal').style.display='flex';
@@ -3078,28 +3111,271 @@ const Admin = {
 
   viewPO(poNum) {
     const po=STATE.pos.find(p=>p.poNum===poNum); if(!po) return;
-    const invs=STATE.invoices.filter(i=>i.poNum===poNum);
-    const totalInv=invs.reduce((s,i)=>s+i.invAmount,0);
+    const invs=STATE.invoices.filter(i=>i.poNum===poNum).sort((a,b)=>(a.invDate||'').localeCompare(b.invDate||''));
+    const activeInvs=invs.filter(i=>i.status!=='Cancelled'&&i.status!=='Rejected');
+    const totalInv=activeInvs.reduce((s,i)=>s+(i.amount||i.invAmount||0),0);
+    const cancelledInvs=invs.filter(i=>i.status==='Cancelled'||i.status==='Rejected');
+    const remaining=po.start-totalInv;
+    const pctUsed=po.start>0?Math.round((totalInv/po.start)*100):0;
+    const barCls=pctUsed>90?'crit':pctUsed>65?'warn':'good';
+
+    // Monthly breakdown
+    const monthMap={};
+    activeInvs.forEach(i=>{
+      const d=i.invDate||i.dueDate||'';
+      const key=d.slice(0,7)||'Unknown';
+      if(!monthMap[key]) monthMap[key]={count:0,total:0};
+      monthMap[key].count++;
+      monthMap[key].total+=(i.amount||i.invAmount||0);
+    });
+    const monthKeys=Object.keys(monthMap).sort();
+
+    // Running balance rows
+    let runBal=po.start;
+    const runRows=activeInvs.map(i=>{
+      const amt=(i.amount||i.invAmount||0);
+      runBal-=amt;
+      return {...i,_runBal:runBal,_amt:amt};
+    });
+
+    // Build PO lines breakdown HTML
+    const dist=parsePODistribution(po);
+    let poLinesHTML='';
+    if(dist.length>1 || (dist.length===1 && po.multiAcct)){
+      let linesRows='';
+      dist.forEach(d=>{
+        const bl=STATE.budget.find(b=>b.div===d.div&&String(b.acct)===String(d.acct));
+        const desc=bl?bl.desc:'';
+        const nick=bl&&bl.nickname?' <span style="color:var(--coral);font-style:italic">('+bl.nickname+')</span>':'';
+        const lineInvs=activeInvs.filter(i=>i.div===d.div&&String(i.acct)===String(d.acct));
+        const lineInvTotal=lineInvs.reduce((s,i)=>s+(i.amount||i.invAmount||0),0);
+        const lineBal=d.amount-lineInvTotal;
+        linesRows+='<tr><td><span class="tag tag-gray" style="font-size:10px">'+d.div+'</span></td>'
+          +'<td style="font-weight:600">'+d.acct+nick+'</td>'
+          +'<td style="font-size:12px;color:var(--text2)">'+desc+'</td>'
+          +'<td style="text-align:right">'+fmt(d.amount)+'</td>'
+          +'<td style="text-align:right;color:var(--warning)">'+fmt(lineInvTotal)+'</td>'
+          +'<td style="text-align:right;font-weight:600;color:'+(lineBal<0?'var(--danger)':'var(--success)')+'">'+fmt(lineBal)+'</td></tr>';
+      });
+      const distTotal=dist.reduce((s,d)=>s+d.amount,0);
+      poLinesHTML='<div class="card" style="margin-bottom:16px">'
+        +'<div class="card-title">📊 PO Account Lines ('+dist.length+')</div>'
+        +'<div class="table-wrap"><table><thead><tr><th>Division</th><th>Account</th><th>Description</th><th style="text-align:right">Line Amount</th><th style="text-align:right">Invoiced</th><th style="text-align:right">Line Balance</th></tr></thead>'
+        +'<tbody>'+linesRows
+        +'<tr style="background:var(--bg2);font-weight:700"><td colspan="3" style="text-align:right">Totals</td>'
+        +'<td style="text-align:right">'+fmt(distTotal)+'</td>'
+        +'<td style="text-align:right;color:var(--warning)">'+fmt(totalInv)+'</td>'
+        +'<td style="text-align:right;color:'+(remaining<0?'var(--danger)':'var(--success)')+'">'+fmt(remaining)+'</td></tr>'
+        +'</tbody></table></div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:6px">ℹ️ Invoices matched to lines by div+account. Unlinked invoices count toward PO total but not individual lines.</div></div>';
+    }
+
+    // Linked contract lookup
+    const linkedContract=po.linkedContract||(()=>{const c=STATE.contracts.find(c=>c.ctLinkedPO===po.poNum);return c?c.ctNumber+' — '+c.ctVendor:'—';})();
+
     $('poDetailTitle').textContent=`PO ${po.poNum} — ${po.vendor}`;
     $('poDetailBody').innerHTML=`
-      <div class="form-row" style="margin-bottom:14px">
-        <div><div class="stat-label">Vendor</div><div style="font-weight:600">${po.vendor}</div></div>
-        <div><div class="stat-label">Code</div>${tagHTML(po.code)}</div>
-        <div><div class="stat-label">FY</div>${po.fiscal}</div>
-        <div><div class="stat-label">Division</div>${po.div||'Multi'}${po.acct?` · <span style="font-size:12px">${po.acct}</span>`:''}${po.acctNickname?` <span style="color:var(--coral);font-style:italic;font-size:11px">(${po.acctNickname})</span>`:''}</div>
+      <!-- KPI Cards -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-card info"><div class="stat-label">Starting Amount</div><div class="stat-value">${fmtK(po.start)}</div><div class="stat-sub">${po.fiscal} · ${po.code||'—'}</div></div>
+        <div class="stat-card warning"><div class="stat-label">Total Invoiced</div><div class="stat-value">${fmtK(totalInv)}</div><div class="stat-sub">${activeInvs.length} invoice${activeInvs.length!==1?'s':''}</div></div>
+        <div class="stat-card ${remaining<0?'danger':'success'}"><div class="stat-label">PO Balance</div><div class="stat-value">${fmtK(remaining)}</div><div class="stat-sub">${pctUsed}% used</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Invoice</div><div class="stat-value">${activeInvs.length?fmtK(totalInv/activeInvs.length):'—'}</div><div class="stat-sub">${cancelledInvs.length?cancelledInvs.length+' cancelled/rejected':''}</div></div>
       </div>
-      <div class="form-row" style="margin-bottom:14px">
-        <div><div class="stat-label">Starting</div><div style="font-weight:700;font-size:18px">${fmt(po.start)}</div></div>
-        <div><div class="stat-label">Balance</div><div style="font-weight:700;font-size:18px;color:var(--success)">${fmt(po.balance)}</div></div>
-        <div><div class="stat-label">Invoiced</div><div style="font-weight:700;font-size:18px;color:var(--coral)">${fmt(totalInv)}</div></div>
+
+      <!-- Usage Bar -->
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px">
+          <span>Usage: ${fmt(totalInv)} of ${fmt(po.start)}</span>
+          <span>${pctUsed}%</span>
+        </div>
+        <div class="budget-bar-wrap" style="height:10px"><div class="budget-bar ${barCls}" style="width:${Math.min(100,pctUsed)}%"></div></div>
       </div>
-      ${po.multiAcct?`<div class="info-box" style="margin-bottom:12px"><strong>Distribution:</strong> ${po.multiAcct}</div>`:''}
-      ${po.notes?`<div class="simple-notice" style="margin-bottom:12px">${po.notes}</div>`:''}
-      ${po.fiscal==='FY25'?'<div class="warning-box" style="margin-bottom:12px">⚠️ FY25 PO — cannot roll. Invoices before Sept 1 2026 noted.</div>':''}
-      ${po.tricky?'<div class="warning-box" style="margin-bottom:12px">🔗 Budget link needed.</div>':''}
-      <div class="section-header"><span class="section-title">Invoices</span></div>
-      ${invs.length?`<div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Amount</th><th>Date</th><th>Approved</th></tr></thead><tbody>${invs.map(i=>`<tr><td>${i.invNumber}</td><td>${fmt(i.invAmount)}</td><td>${i.invDate}</td><td>${i.approved?'✓':'Pending'}</td></tr>`).join('')}</tbody></table></div>`:'<div class="simple-notice">No invoices yet.</div>'}`;
+
+      <!-- PO Details -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;font-size:12px">
+          <div><span style="font-weight:700;color:var(--text2)">Vendor</span><br>${po.vendor}</div>
+          <div><span style="font-weight:700;color:var(--text2)">PO Code</span><br>${tagHTML(po.code)} ${po.type||''}</div>
+          <div><span style="font-weight:700;color:var(--text2)">Division</span><br>${po.div||'Multi'}${po.acct?' · '+po.acct:''}${po.acctNickname?` <span style="color:var(--coral);font-style:italic">(${po.acctNickname})</span>`:''}</div>
+          <div><span style="font-weight:700;color:var(--text2)">PO Date</span><br>${po.date||'—'}</div>
+          <div><span style="font-weight:700;color:var(--text2)">Fiscal Year</span><br>${po.fiscal}</div>
+          <div><span style="font-weight:700;color:var(--text2)">Budget Source</span><br>${po.budgetSource==='cip'?'CIP':'Operating'}</div>
+          <div><span style="font-weight:700;color:var(--text2)">Linked Contract</span><br>${linkedContract}</div>
+          <div><span style="font-weight:700;color:var(--text2)">PO Status</span><br>${po.fiscal==='FY25'?'<span class="tag tag-orange">FY25</span>':po.tricky?'<span class="tag tag-orange">Needs Link</span>':'<span class="tag tag-green">Active</span>'}</div>
+        </div>
+        ${po.notes?`<div class="simple-notice" style="margin-top:8px;font-size:12px">📝 ${po.notes}</div>`:''}
+        ${po.fiscal==='FY25'?'<div class="warning-box" style="margin-top:8px">⚠️ FY25 PO — cannot roll to FY26. Invoices tracked but not deducted from FY26 budget.</div>':''}
+        ${po.tricky?'<div class="warning-box" style="margin-top:8px">🔗 Budget link needed — distribution unknown.</div>':''}
+      </div>
+
+      <!-- PO Account Lines Breakdown -->
+      ${poLinesHTML}
+
+      <!-- Monthly Breakdown -->
+      ${monthKeys.length>1?`
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">📊 Monthly Breakdown</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px">
+          ${monthKeys.map(k=>`<div style="background:var(--bg2);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:10px;color:var(--text3);font-weight:600">${k}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text1)">${fmtK(monthMap[k].total)}</div>
+            <div style="font-size:10px;color:var(--text2)">${monthMap[k].count} inv</div>
+          </div>`).join('')}
+        </div>
+      </div>`:''}
+
+      <!-- Actions Row -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="Admin.exportSPOTracking('${po.poNum}')">📥 Export SPO Tracking Form</button>
+        <button class="btn btn-secondary btn-sm" onclick="Admin.exportPOInvoiceCSV('${po.poNum}')">📤 Export Invoices CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="Admin.openNewPOModal('${po.poNum}');App.closeModal('poDetailModal')">✏️ Edit PO</button>
+      </div>
+
+      <!-- Invoice Table with Running Balance -->
+      <div class="section-header"><span class="section-title">📑 All Invoices (${invs.length})</span></div>
+      ${invs.length?`<div class="table-wrap"><table>
+        <thead><tr>
+          <th>#</th><th>Invoice #</th><th>Vendor</th><th>Amount</th>
+          <th>Invoice Date</th><th>Due Date</th><th>Status</th><th>Running Balance</th>
+        </tr></thead>
+        <tbody>${runRows.map((i,idx)=>{
+          const isCancelled=i.status==='Cancelled'||i.status==='Rejected';
+          return `<tr style="${isCancelled?'opacity:.5;text-decoration:line-through':''}">
+            <td style="font-size:11px;color:var(--text3)">${idx+1}</td>
+            <td style="font-weight:600">${i.invNumber||'—'}</td>
+            <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${i.vendor||''}">${i.vendor||'—'}</td>
+            <td style="font-weight:600">${fmt(i._amt)}</td>
+            <td style="font-size:11px;color:var(--text2)">${i.invDate||'—'}</td>
+            <td style="font-size:11px;color:var(--text2)">${i.dueDate||'—'}</td>
+            <td><span class="tag ${Admin._statusColor(i.status)}" style="font-size:10px">${i.status||'—'}</span></td>
+            <td style="font-weight:600;color:${i._runBal<0?'var(--danger)':'var(--success)'}">${isCancelled?'—':fmt(i._runBal)}</td>
+          </tr>`;
+        }).join('')}
+        <tr style="background:var(--bg2);font-weight:700">
+          <td colspan="3" style="text-align:right">Totals</td>
+          <td>${fmt(totalInv)}</td>
+          <td colspan="3"></td>
+          <td style="color:${remaining<0?'var(--danger)':'var(--success)'}">${fmt(remaining)}</td>
+        </tr>
+        </tbody></table></div>`
+        :'<div class="simple-notice">No invoices recorded for this PO yet.</div>'}
+
+      ${cancelledInvs.length?`
+      <div style="margin-top:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">⚠️ Cancelled / Rejected (${cancelledInvs.length}) — not counted in totals</div>
+        <div class="table-wrap"><table><thead><tr><th>Invoice #</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead>
+        <tbody>${cancelledInvs.map(i=>`<tr style="opacity:.6">
+          <td>${i.invNumber}</td><td>${fmt(i.amount||i.invAmount||0)}</td><td>${i.invDate||'—'}</td>
+          <td><span class="tag ${Admin._statusColor(i.status)}" style="font-size:10px">${i.status}</span></td>
+        </tr>`).join('')}</tbody></table></div>
+      </div>`:''}`;
     $('poDetailModal').style.display='flex';
+  },
+
+  // Export SPO Tracking Form as .xlsx
+  exportSPOTracking(poNum) {
+    const po=STATE.pos.find(p=>p.poNum===poNum); if(!po) return;
+    const invs=STATE.invoices.filter(i=>i.poNum===poNum&&i.status!=='Cancelled'&&i.status!=='Rejected').sort((a,b)=>(a.invDate||'').localeCompare(b.invDate||''));
+    const desc=po.type||po.notes||po.vendor||'';
+    const dateStr=new Date().toISOString().split('T')[0].replace(/-/g,'');
+    const fileName=`SPO_Tracking_PO${poNum}_${desc.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30)}_${po.vendor.replace(/[^a-zA-Z0-9]/g,'_').slice(0,20)}_${dateStr}.xlsx`;
+
+    // Build workbook using SheetJS
+    const wb=XLSX.utils.book_new();
+    const data=[];
+    // Header section
+    data.push([]);
+    data.push([null,null,null,null,null,null,null,null,'CITY OF CORAL GABLES']);
+    data.push([null,null,null,null,null,null,null,null,'405 Biltmore Way']);
+    data.push([null,null,null,null,null,null,null,null,'Coral Gables, FL  33134']);
+    data.push([null,null,null,null,null,null,null,null,'(305) 460-5102']);
+    data.push(['Small Purchase Order Tracking Form']);
+    data.push(['Department:   Parking']);
+    data.push(['Vendor: '+po.vendor]);
+    data.push(['SPO # '+poNum,null,null,'SPO Starting Balance:  ',po.start]);
+    data.push([]);
+    data.push(['Transaction Date','Purchase Description',null,'Order Value','Payment Method','PO Balance','Notes/Comments']);
+
+    // Invoice rows with running balance
+    let bal=po.start;
+    invs.forEach(inv=>{
+      const amt=(inv.amount||inv.invAmount||0);
+      bal-=amt;
+      data.push([
+        inv.invDate||inv.dueDate||'',
+        `Invoice #${inv.invNumber}${inv.vendor?' - '+inv.vendor:''}`,
+        null,
+        amt,
+        'PO',
+        bal,
+        inv.invNotes||inv.invMonth||''
+      ]);
+    });
+
+    // Add empty rows for future entries
+    for(let r=0;r<10;r++){
+      bal=bal||0;
+      data.push([null,null,null,null,null,null,null]);
+    }
+
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    // Set column widths
+    ws['!cols']=[{wch:16},{wch:8},{wch:40},{wch:16},{wch:20},{wch:15},{wch:8},{wch:16},{wch:14}];
+    // Merge cells for header
+    ws['!merges']=[
+      {s:{r:5,c:0},e:{r:5,c:8}}, // Title row
+      {s:{r:6,c:2},e:{r:6,c:8}}, // Department
+      {s:{r:7,c:2},e:{r:7,c:8}}, // Vendor
+      {s:{r:10,c:1},e:{r:10,c:2}}, // Purchase Description header
+      {s:{r:10,c:6},e:{r:10,c:8}}, // Notes header
+    ];
+    // Merge notes columns for each data row
+    for(let r=11;r<data.length;r++){
+      ws['!merges'].push({s:{r,c:6},e:{r,c:8}});
+    }
+
+    XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+    XLSX.writeFile(wb,fileName);
+    showToast(`SPO Tracking exported: ${fileName}`,'success');
+  },
+
+  // Export PO invoices as CSV
+  exportPOInvoiceCSV(poNum) {
+    const po=STATE.pos.find(p=>p.poNum===poNum); if(!po) return;
+    const invs=STATE.invoices.filter(i=>i.poNum===poNum).sort((a,b)=>(a.invDate||'').localeCompare(b.invDate||''));
+    const rows=[['Invoice #','Vendor','Amount','Invoice Date','Due Date','Status','Month','Notes']];
+    invs.forEach(i=>rows.push([i.invNumber,i.vendor||po.vendor,i.amount||i.invAmount||0,i.invDate||'',i.dueDate||'',i.status||'',i.invMonth||'',i.invNotes||'']));
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const a=document.createElement('a');a.href='data:text/csv,'+encodeURIComponent(csv);
+    a.download=`PO_${poNum}_${po.vendor.replace(/[^a-zA-Z0-9]/g,'_')}_invoices.csv`;a.click();
+    showToast('Invoice CSV exported ✓','success');
+  },
+
+  exportSPOFromSelect() {
+    const sel=$('exportSPOSelect');
+    if(!sel||!sel.value){showToast('Select a PO first.','error');return;}
+    Admin.exportSPOTracking(sel.value);
+  },
+
+  populateExportSPO() {
+    const sel=$('exportSPOSelect'); if(!sel) return;
+    const invCounts={};
+    STATE.invoices.forEach(i=>{if(i.poNum){invCounts[i.poNum]=(invCounts[i.poNum]||0)+1;}});
+    sel.innerHTML=`<option value="">— Select PO —</option>${STATE.pos.map(p=>`<option value="${p.poNum}">${p.poNum} — ${p.vendor} (${invCounts[p.poNum]||0} invoices)</option>`).join('')}`;
+    sel.onchange=()=>{
+      const po=STATE.pos.find(p=>p.poNum===sel.value);
+      const prev=$('exportSPOPreview');
+      if(po&&prev){
+        const cnt=(invCounts[po.poNum]||0);
+        prev.style.display='block';
+        prev.innerHTML=`<div class="info-box" style="font-size:12px">
+          <strong>${po.vendor}</strong> · ${po.code||'—'} · ${po.fiscal}<br>
+          Starting: ${fmt(po.start)} · ${cnt} invoice${cnt!==1?'s':''}<br>
+          <span style="color:var(--text3)">File: SPO_Tracking_PO${po.poNum}_…xlsx</span>
+        </div>`;
+      } else if(prev) prev.style.display='none';
+    };
   },
 
   pickPOPDF() { const inp=document.createElement('input');inp.type='file';inp.accept='application/pdf';inp.onchange=e=>{const f=e.target.files[0];if(f){$('poPDFLabel').textContent='✓ '+f.name;$('poPDFZone').classList.add('has-file');}};inp.click(); },
@@ -3108,12 +3384,47 @@ const Admin = {
   invoicePOSelected() {
     const val=$('invPOSelect').value;
     const po=STATE.pos.find(p=>(p._id===val||p.poNum===val));
-    if(!po){$('invVendor').value='';$('invPOBalance').style.display='none';return;}
+    if(!po){$('invVendor').value='';$('invPOBalance').style.display='none';$('invPOLineSection').style.display='none';return;}
     $('invVendor').value=po.vendor;
     const paid=App.getInvoicedTotal(po.poNum);
     $('invPOBalance').innerHTML=`Starting: <strong>${fmt(po.start)}</strong> · Invoiced: <strong style="color:var(--warning)">${fmt(paid)}</strong> · Remaining: <strong style="color:var(--success)">${fmt(po.start-paid)}</strong> · Type: ${po.type||po.code||'—'}`;
     $('invPOBalance').style.display='block';
     $('fy25InvWarn').style.display=po.fiscal==='FY25'?'block':'none';
+
+    // Always show account line section — every invoice must be explicitly linked to a div+acct
+    const dist=parsePODistribution(po);
+    const lineSelect=$('invPOLine');
+    const lineSection=$('invPOLineSection');
+    const lineLabel=$('invPOLineLabel');
+    if(dist.length===0){
+      // Tricky / unlinked PO — no account lines defined yet
+      lineSelect.innerHTML=`<option value="">⚠️ No account lines — edit this PO to add lines first</option>`;
+      if(lineLabel) lineLabel.innerHTML='Account Line <span style="color:var(--danger);font-weight:600">⚠️ Edit this PO to define account lines before entering invoices.</span>';
+    } else if(dist.length===1){
+      // Single line — auto-select but always show so it's clear where invoice charges
+      const d=dist[0];
+      const bl=STATE.budget.find(b=>b.div===d.div&&String(b.acct)===String(d.acct));
+      const lineInvs=STATE.invoices.filter(i=>i.poNum===po.poNum&&i.status!=='Cancelled'&&i.status!=='Rejected'&&i.div===d.div&&String(i.acct)===String(d.acct));
+      const lineUsed=lineInvs.reduce((s,i)=>s+(i.amount||0),0);
+      const lineRem=d.amount-lineUsed;
+      const desc=bl?.desc?' · '+bl.desc:'';
+      lineSelect.innerHTML=`<option value="${d.div}|${d.acct}" selected>Div ${d.div} — Acct ${d.acct}${desc} | Remaining: ${fmt(lineRem)}</option>`;
+      if(lineLabel) lineLabel.innerHTML='Charging to';
+    } else {
+      // Multi-line PO — user must pick which line this invoice applies to
+      lineSelect.innerHTML=`<option value="">— Select which line this invoice charges —</option>${dist.map(d=>{
+        const bl=STATE.budget.find(b=>b.div===d.div&&String(b.acct)===String(d.acct));
+        const nick=bl?.nickname?' ('+bl.nickname+')':'';
+        const desc=bl?.desc?' · '+bl.desc:'';
+        const lineInvs=STATE.invoices.filter(i=>i.poNum===po.poNum&&i.status!=='Cancelled'&&i.status!=='Rejected'&&i.div===d.div&&String(i.acct)===String(d.acct));
+        const lineUsed=lineInvs.reduce((s,i)=>s+(i.amount||0),0);
+        const lineRem=d.amount-lineUsed;
+        const remLabel=lineRem<0?'🔴 '+fmt(lineRem):'🟢 '+fmt(lineRem);
+        return `<option value="${d.div}|${d.acct}">Div ${d.div} — Acct ${d.acct}${nick}${desc} | Allocated: ${fmt(d.amount)} | Remaining: ${remLabel}</option>`;
+      }).join('')}`;
+      if(lineLabel) lineLabel.innerHTML='Which PO line does this invoice apply to? <span style="color:var(--coral);font-weight:600">*</span>';
+    }
+    lineSection.style.display='block';
   },
 
   checkBlanketLimit() {
@@ -3129,12 +3440,24 @@ const Admin = {
     const amt=parseFloat($('invAmount').value)||0, date=$('invDate').value;
     if(!val||!invNum||!amt||!date){showToast('Fill all required fields.','error');return;}
     const po=STATE.pos.find(p=>p._id===val||p.poNum===val);
+    // Validate PO line selection on multi-line POs
+    const dist=parsePODistribution(po);
+    const lineVal=$('invPOLine')?.value||'';
+    if(dist.length>1 && !lineVal){showToast('Please select which PO line this invoice charges to.','error');return;}
+    if(dist.length===0){showToast('This PO has no account lines defined. Edit the PO first.','error');return;}
     // Duplicate check
     const dup=STATE.invoices.find(i=>i.invNumber===invNum&&(i.vendor||i.invVendor)===(po?.vendor||''));
     if(dup){showToast('Invoice #'+invNum+' already exists for this vendor.','error');return;}
     const inv={poNum:po?.poNum||val, invNumber:invNum, amount:amt, invDate:date,
       vendor:po?.vendor||'', invMonth:$('invMonth')?.value||'', invNotes:$('invNotes')?.value||'',
-      status:'Released', div:po?.div, acct:po?.acct, createdAt:today(), source:'manual'};
+      status:'Released', createdAt:today(), source:'manual'};
+    // Set div/acct from PO line picker (lineVal already computed above)
+    if(lineVal && lineVal.includes('|')){
+      const [ld,la]=lineVal.split('|');
+      inv.div=ld; inv.acct=la;
+    } else {
+      inv.div=po?.div||''; inv.acct=po?.acct||'';
+    }
     showLoading('Saving…');
     await SDB.insert('invoices',inv);
     STATE.invoices=await SDB.getAll('invoices');
@@ -3188,19 +3511,21 @@ const Admin = {
     const start=Admin._invPage*Admin._invPageSize;
     const page=invs.slice(start, start+Admin._invPageSize);
 
-    if(!invs.length){tbody.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text2)">No invoices found.</td></tr>';}
+    if(!invs.length){tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text2)">No invoices found.</td></tr>';}
     else tbody.innerHTML=page.map(i=>{
       const v=i.vendor||i.invVendor||'—';
       const amt=i.amount||i.invAmount||0;
       const sc=Admin._statusColor(i.status);
+      const divAcct=i.div&&i.acct?i.div+'-'+i.acct:(i.div||'');
       return `<tr>
         <td><strong style="font-size:11px">${i.invNumber||'—'}</strong></td>
-        <td style="font-size:11px">${i.poNum?`<a href="#" onclick="Admin.filterByPO('${i.poNum}');return false" style="color:var(--info)">${i.poNum}</a>`:'<span class="tag tag-orange" style="font-size:9px">No PO</span>'}</td>
+        <td style="font-size:11px">${i.poNum?`<a href="#" onclick="Admin.viewPO('${i.poNum}');return false" style="color:var(--info);text-decoration:underline" title="Open PO Dashboard">${i.poNum}</a>`:'<span class="tag tag-orange" style="font-size:9px">No PO</span>'}</td>
         <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${v}">${v}</td>
         <td style="font-weight:600">${fmt(amt)}</td>
         <td style="font-size:11px">${i.invDate||'—'}</td>
         <td style="font-size:11px">${i.dueDate||'—'}</td>
         <td><span class="tag ${sc}" style="font-size:10px">${i.status||'—'}</span></td>
+        <td style="font-size:10px;color:var(--text3)">${divAcct||'—'}</td>
         <td style="font-size:10px;color:var(--text3)">${i.source==='import'?'📥':'✍️'}</td>
         <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteInvoice('${i._id}')">✕</button></td>
       </tr>`;
@@ -3691,6 +4016,63 @@ const Admin = {
     showToast('CIP project deleted.','success');
   },
 
+  importCIPFromFile() {
+    const inp=document.createElement('input');inp.type='file';inp.accept='.xlsx,.csv';
+    inp.onchange=async e=>{
+      const f=e.target.files[0]; if(!f) return;
+      showLoading('Reading CIP file…');
+      try {
+        const ab=await f.arrayBuffer();
+        const wb=XLSX.read(ab,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+        // Find header row — look for "Project" or "Adopted" in any cell
+        let headerIdx=-1;
+        for(let r=0;r<Math.min(10,rows.length);r++){
+          const rowStr=(rows[r]||[]).join(' ').toLowerCase();
+          if(rowStr.includes('project')||rowStr.includes('adopted')||rowStr.includes('budget')){headerIdx=r;break;}
+        }
+        if(headerIdx<0) headerIdx=2; // fallback: skip first 2 rows
+
+        const imported=[];
+        for(let r=headerIdx+1;r<rows.length;r++){
+          const row=rows[r]; if(!row||row.every(c=>c===null||c==='')) continue;
+          // Try to find project name (longest text cell) and budget (largest number)
+          let name='',budget=0,balance=0;
+          for(const cell of row){
+            if(typeof cell==='string'&&cell.length>3&&cell.length>name.length) name=cell.trim();
+            if(typeof cell==='number'&&cell>budget){balance=budget;budget=cell;}
+          }
+          if(name&&budget>0){
+            imported.push({id:Date.now().toString()+r, name, div:'', fy:CURRENT_FY, budget, balance, desc:'Imported from CIP file', linkedPOs:[]});
+          }
+        }
+        if(!imported.length){hideLoading();showToast('No CIP projects found in file.','error');return;}
+
+        if(!STATE.cipProjects) STATE.cipProjects=[];
+        // Add only new projects (by name)
+        const existingNames=new Set(STATE.cipProjects.map(p=>p.name.toLowerCase()));
+        let added=0;
+        for(const proj of imported){
+          if(!existingNames.has(proj.name.toLowerCase())){
+            STATE.cipProjects.push(proj);
+            existingNames.add(proj.name.toLowerCase());
+            added++;
+          }
+        }
+        await SDB.setSetting('cipProjects', STATE.cipProjects);
+        hideLoading();
+        Admin.renderCIPBudget();
+        showToast(`Imported ${added} CIP projects (${imported.length-added} duplicates skipped).`,'success');
+      } catch(err){
+        hideLoading();
+        console.error('CIP import error:',err);
+        showToast('Error reading CIP file: '+err.message,'error');
+      }
+    };
+    inp.click();
+  },
+
   // ── REVENUE ───────────────────────────────────────────────────────
   renderRevenue() {
     const el=$('revenueContent'); if(!el) return;
@@ -3874,14 +4256,32 @@ const Admin = {
         <td><span class="tag ${ec}">${c.ctExpDate} (${days}d)</span></td>
         <td>${c.ctExtDate||'—'}</td><td><span class="tag tag-blue">${c.ctFuturePlan||'—'}</span></td>
         <td>${c.ctLinkedPO||'—'}</td>
-        <td><button class="btn btn-secondary btn-xs" onclick="Admin.deleteContract('${c._id}')">Delete</button></td>
+        <td><div style="display:flex;gap:4px">
+          <button class="btn btn-secondary btn-xs" onclick="Admin.openNewContractModal('${c._id}')">Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="Admin.deleteContract('${c._id}')">Del</button>
+        </div></td>
       </tr>`;
     }).join('');
   },
 
-  openNewContractModal() {
+  openNewContractModal(editId=null) {
     ['ctNumber','ctVendor','ctStartDate','ctExpDate','ctExtDate','ctLinkedPO','ctNotes'].forEach(id=>$(id).value='');
     $('ctDivision').value='';$('ctType').value='';$('ctFuturePlan').value='';
+    if(editId){
+      const c=STATE.contracts.find(x=>x._id===editId);
+      if(c){
+        $('newContractTitle').textContent='Edit Contract';
+        $('ctNumber').value=c.ctNumber||'';$('ctVendor').value=c.ctVendor||'';
+        $('ctDivision').value=c.ctDivision||'';$('ctType').value=c.ctType||'';
+        $('ctStartDate').value=c.ctStartDate||'';$('ctExpDate').value=c.ctExpDate||'';
+        $('ctExtDate').value=c.ctExtDate||'';$('ctLinkedPO').value=c.ctLinkedPO||'';
+        $('ctFuturePlan').value=c.ctFuturePlan||'';$('ctNotes').value=c.ctNotes||'';
+        Admin._editContractId=editId;
+      }
+    } else {
+      $('newContractTitle').textContent='New Contract';
+      Admin._editContractId=null;
+    }
     $('newContractModal').style.display='flex';
   },
 
@@ -3892,9 +4292,14 @@ const Admin = {
       ctStartDate:$('ctStartDate').value,ctExpDate:exp,ctExtDate:$('ctExtDate').value,
       ctLinkedPO:$('ctLinkedPO').value,ctFuturePlan:$('ctFuturePlan').value,ctNotes:$('ctNotes').value};
     showLoading('Saving…');
-    await SDB.insert('contracts',ct);
+    if(Admin._editContractId){
+      await SDB.update('contracts',Admin._editContractId,ct);
+    } else {
+      await SDB.insert('contracts',ct);
+    }
     STATE.contracts=await SDB.getAll('contracts');
     hideLoading();
+    Admin._editContractId=null;
     App.closeModal('newContractModal');
     Admin.renderContracts(); Admin.updateBadges();
     showToast('Contract saved ✓','success');
