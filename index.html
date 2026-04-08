@@ -892,25 +892,66 @@ async function importBudgetFile(file, year) {
 
 async function importPOFile(file) {
   const rows = await fileToRows(file);
-  let added = 0, skipped = 0;
+  let added = 0, skipped = 0, linesAdded = 0, lineDupSkipped = 0;
   rows.forEach(r => {
     const poNo = String(r["PO #"] || r["Purchase Order #"] || r["PO"] || "").trim();
     if (!poNo) { skipped++; return; }
-    const line = {
-      division: String(r["Division"] || r["division"] || "").trim(),
-      account: String(r["Account #"] || r["Account"] || "").trim(),
-      amount: Number(r["Amount"] || r["PO Amount"] || 0)
-    };
+
+    const divisionRaw = String(
+      r["Division"] || r["division"] || r["Division #"] || r["Division Code"] || ""
+    ).trim();
+    const accountRaw = String(
+      r["Account #"] || r["Account"] || r["account"] || r["Account Number"] || ""
+    ).trim();
+    const amountRaw = Number(r["Amount"] || r["PO Amount"] || r["Line Amount"] || 0);
+    const lineNo = String(r["Line #"] || r["Line"] || r["Line No"] || "").trim();
+
+    // Accept separators for cross-division line mappings in one row.
+    const splitMixed = (value) => String(value || "")
+      .replaceAll(";", ",")
+      .replaceAll("|", ",")
+      .replaceAll("/", ",")
+      .split(",")
+      .map(v => v.trim())
+      .filter(Boolean);
+    const divParts = splitMixed(divisionRaw);
+    const acctParts = splitMixed(accountRaw);
+    const maxParts = Math.max(divParts.length, acctParts.length, 1);
+
     let po = state.data.purchaseOrders.find(p => p.poNo === poNo);
     if (!po) {
       po = { poNo, vendor: String(r["Vendor Name"] || r["Vendor"] || ""), description: String(r["Description"] || ""), lines: [], status: "active" };
       state.data.purchaseOrders.push(po);
       added++;
     }
-    const dup = po.lines.find(x => x.division === line.division && x.account === line.account && Number(x.amount) === Number(line.amount));
-    if (!dup) po.lines.push(line);
+
+    for (let i = 0; i < maxParts; i++) {
+      const division = divParts[i] || divParts[0] || "";
+      const account = acctParts[i] || acctParts[0] || "";
+      const amount = Number(amountRaw || 0);
+      const supervisor = divisionMatrix.find(d => String(d.division) === String(division))?.supervisor || "";
+
+      const line = { lineNo, division, account, amount, supervisor };
+
+      // Dedupe by explicit line number when available, otherwise by full signature.
+      const dup = po.lines.find(x => {
+        if (lineNo && String(x.lineNo || "") === lineNo) return true;
+        return (
+          String(x.division || "") === String(division) &&
+          String(x.account || "") === String(account) &&
+          Number(x.amount || 0) === Number(amount || 0)
+        );
+      });
+
+      if (dup) {
+        lineDupSkipped++;
+        continue;
+      }
+      po.lines.push(line);
+      linesAdded++;
+    }
   });
-  return `${added} POs added, ${skipped} skipped.`;
+  return `${added} POs added, ${linesAdded} PO lines added, ${lineDupSkipped} duplicate lines skipped, ${skipped} rows skipped.`;
 }
 
 async function importInvoiceFile(file) {
@@ -926,6 +967,9 @@ async function importInvoiceFile(file) {
     const vendorName = String(r["Vendor Name"] || r["Vendor"] || "").trim();
     const status = String(r["Status"] || "").trim();
     const division = String(r["Division"] || r["division"] || "").trim();
+    const poLineKey = String(r["PO Line"] || r["PO Line Key"] || "").trim();
+    const approvalRaw = String(r["Approval Required"] || r["Needs Approval"] || "no").trim().toLowerCase();
+    const approvalRequired = ["yes", "y", "true", "1"].includes(approvalRaw) ? "yes" : "no";
     state.data.invoices.push({
       invoiceNo, poNo, amount, vendorNo, vendorName, status,
       date: String(r["Date Entered"] || ""),
@@ -933,8 +977,21 @@ async function importInvoiceFile(file) {
       matchType: String(r["MatchProcessType"] || ""),
       payableInvoice: String(r["Payable Invoice "] || r["Payable Invoice"] || ""),
       type: poNo ? "po" : "basic",
-      division
+      division,
+      poLineKey,
+      approvalRequired
     });
+    if (approvalRequired === "yes") {
+      const approvalTo = String(r["Approval To"] || r["Supervisor"] || "").trim();
+      if (approvalTo) {
+        state.data.invoiceApprovals.push({
+          id: `${invoiceNo}-${Date.now()}-${added}`,
+          invoiceNo,
+          supervisor: approvalTo,
+          status: "pending"
+        });
+      }
+    }
     added++;
   });
   return `${added} invoices added, ${skipped} skipped (duplicates or empty).`;
@@ -972,7 +1029,12 @@ function renderManage() {
         <h3>➕ Add Invoice</h3>
         <form id="singleInvoiceForm" class="form-grid">
           <label>Invoice # <input name="invoiceNo" required></label>
-          <label>PO # (optional) <input name="poNo" placeholder="Leave blank if no PO"></label>
+          <label>PO # (optional) <input name="poNo" id="singleInvoicePoNo" placeholder="Leave blank if no PO"></label>
+          <label>PO Line (optional)
+            <select name="poLineKey" id="singleInvoicePoLine">
+              <option value="">— Select PO first —</option>
+            </select>
+          </label>
           <label>Vendor Name <input name="vendorName"></label>
           <label>Division <select name="division"><option value="">— None —</option>${divOpts}</select></label>
           <label>Amount ($) <input name="amount" type="number" step="0.01" required></label>
@@ -981,6 +1043,12 @@ function renderManage() {
           <label>Status
             <select name="status">
               <option>Historical</option><option>Pending</option><option>Paid</option><option>Void</option>
+            </select>
+          </label>
+          <label>Approval Required?
+            <select name="approvalRequired">
+              <option value="no">No Approval Needed</option>
+              <option value="yes">Yes</option>
             </select>
           </label>
           <label>Send for Approval <select name="approvalTo">${supOpts}</select></label>
@@ -1033,14 +1101,24 @@ function renderManage() {
     const row = Object.fromEntries(f.entries());
     row.amount = Number(row.amount);
     row.type = row.poNo ? "po" : "basic";
+    row.approvalRequired = (row.approvalRequired || "no").toLowerCase();
+    if (row.poLineKey && !row.division) {
+      const parts = String(row.poLineKey).split("|");
+      row.division = parts[0] || "";
+      row.account = row.account || parts[1] || "";
+    }
     if (state.data.invoices.some(i => i.invoiceNo === row.invoiceNo)) {
       toast("Invoice # already exists.", "error"); return;
     }
     state.data.invoices.push(row);
-    state.data.invoiceApprovals.push({ id: `${row.invoiceNo}-${Date.now()}`, invoiceNo: row.invoiceNo, supervisor: row.approvalTo, status: "pending" });
+    if (row.approvalRequired === "yes") {
+      state.data.invoiceApprovals.push({ id: `${row.invoiceNo}-${Date.now()}`, invoiceNo: row.invoiceNo, supervisor: row.approvalTo, status: "pending" });
+    }
     saveState();
-    toast("Invoice saved and sent for approval.");
+    toast(row.approvalRequired === "yes" ? "Invoice saved and sent for approval." : "Invoice saved (no approval needed).");
     e.target.reset();
+    const poLineSel = document.getElementById("singleInvoicePoLine");
+    if (poLineSel) poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
   };
 
   document.getElementById("singlePOForm").onsubmit = e => {
@@ -1053,6 +1131,22 @@ function renderManage() {
     toast("PO saved.");
     e.target.reset();
   };
+
+  const poNoInput = document.getElementById("singleInvoicePoNo");
+  const poLineSel = document.getElementById("singleInvoicePoLine");
+  const refreshPoLineOptions = () => {
+    const poNo = String(poNoInput?.value || "").trim();
+    const po = state.data.purchaseOrders.find(p => String(p.poNo) === poNo);
+    if (!po) {
+      poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
+      return;
+    }
+    poLineSel.innerHTML = `<option value="">— Not specified —</option>` + (po.lines || []).map((l, idx) => {
+      const key = `${l.division || ""}|${l.account || ""}|${idx}`;
+      return `<option value="${key}">Line ${idx + 1}: Div ${l.division || "?"} / Acct ${l.account || "?"} / ${fmt(l.amount || 0)}</option>`;
+    }).join("");
+  };
+  if (poNoInput) poNoInput.addEventListener("input", refreshPoLineOptions);
 }
 
 window.clearDataSet = function(key) {
@@ -1147,6 +1241,7 @@ function renderPOTracker() {
       <td class="text-right">${fmt(invTotal)}</td>
       <td class="text-right ${bal < 0 ? "warn" : ""}">${fmt(bal)}</td>
       <td>${pct}%</td>
+      <td>${state.user?.type === "admin" ? `<button class="btn sm" onclick="editPO('${String(po.poNo).replace(/'/g, "\\'")}')">Edit</button>` : "—"}</td>
     </tr>`;
   }).join("");
 
@@ -1158,8 +1253,8 @@ function renderPOTracker() {
         <label>Vendor Search <input id="poFilterVendor" placeholder="Type vendor name…" oninput="renderPOTracker()"></label>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>PO #</th><th>Vendor</th><th>Description</th><th>Divisions</th><th>PO Amount</th><th>Invoiced</th><th>Balance</th><th>Used %</th></tr></thead>
-        <tbody>${rows || "<tr><td colspan='8'>No PO data.</td></tr>"}</tbody>
+        <thead><tr><th>PO #</th><th>Vendor</th><th>Description</th><th>Divisions</th><th>PO Amount</th><th>Invoiced</th><th>Balance</th><th>Used %</th><th>Action</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='9'>No PO data.</td></tr>"}</tbody>
       </table></div>
       <p class="muted" style="margin-top:8px">${pos.length} POs shown</p>
     </div>`;
@@ -1285,11 +1380,14 @@ function renderInvoices() {
     <td>${i.invoiceNo}</td>
     <td>${i.vendorName||""}</td>
     <td>${i.poNo||"—"}</td>
+    <td>${i.poLineKey||"—"}</td>
     <td>${i.division||""}</td>
     <td class="text-right">${fmt(i.amount)}</td>
     <td>${i.date||""}</td>
     <td>${i.dueDate||""}</td>
     <td><span class="badge ${(i.status||"").toLowerCase()}">${i.status||""}</span></td>
+    <td>${i.approvalRequired === "yes" ? "Yes" : "No"}</td>
+    <td>${state.user?.type === "admin" ? `<button class="btn sm" onclick="editInvoice('${String(i.invoiceNo).replace(/'/g, "\\'")}')">Edit</button>` : "—"}</td>
   </tr>`).join("");
 
   target.innerHTML = `
@@ -1301,8 +1399,8 @@ function renderInvoices() {
         <label>Vendor <input id="invFilterVendor" placeholder="Search vendor…" oninput="renderInvoices()"></label>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Invoice #</th><th>Vendor</th><th>PO #</th><th>Division</th><th>Amount</th><th>Date</th><th>Due Date</th><th>Status</th></tr></thead>
-        <tbody>${rows || "<tr><td colspan='8'>No invoices.</td></tr>"}</tbody>
+        <thead><tr><th>Invoice #</th><th>Vendor</th><th>PO #</th><th>PO Line</th><th>Division</th><th>Amount</th><th>Date</th><th>Due Date</th><th>Status</th><th>Approval?</th><th>Action</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='11'>No invoices.</td></tr>"}</tbody>
       </table></div>
       <p class="muted" style="margin-top:8px">${invs.length} total invoices ${invs.length>500?" (showing first 500)":""}</p>
     </div>`;
@@ -1392,12 +1490,54 @@ function exportSPOTracking() {
   const poNo = document.getElementById("exportPoNo").value.trim();
   const po = state.data.purchaseOrders.find(p => String(p.poNo) === poNo);
   if (!po) { toast("PO not found.", "error"); return; }
-  const invoices = state.data.invoices.filter(i => String(i.poNo) === poNo);
-  const rows = invoices.map(i => ({
-    "SPO #": po.poNo, "PO Description": po.description||"", "Vendor": po.vendor||"",
-    "Invoice #": i.invoiceNo||"", "Vendor Name": i.vendorName||"",
-    "Invoice Amount": i.amount||"", "Date Entered": i.date||"", "Due Date": i.dueDate||"", "Status": i.status||""
-  }));
+  const poStartBalance = sum((po.lines || []).map(l => Number(l.amount || 0)));
+  const invoices = state.data.invoices
+    .filter(i => String(i.poNo) === poNo)
+    .filter(i => ["historical", "paid"].includes(String(i.status || "").toLowerCase()))
+    .sort((a, b) => String(a.dueDate || a.date || "").localeCompare(String(b.dueDate || b.date || "")));
+
+  let running = poStartBalance;
+  const rows = [{
+    "SPO #": po.poNo,
+    "PO Description": po.description || "",
+    "Vendor": po.vendor || "",
+    "Invoice #": "",
+    "Vendor Name": "",
+    "Invoice Amount": "",
+    "Date Entered": "",
+    "Due Date": "",
+    "Status": "STARTING BALANCE",
+    "Running Balance": running
+  }];
+
+  invoices.forEach(i => {
+    running -= Number(i.amount || 0);
+    rows.push({
+      "SPO #": po.poNo,
+      "PO Description": po.description || "",
+      "Vendor": po.vendor || "",
+      "Invoice #": i.invoiceNo || "",
+      "Vendor Name": i.vendorName || "",
+      "Invoice Amount": Number(i.amount || 0),
+      "Date Entered": i.date || "",
+      "Due Date": i.dueDate || "",
+      "Status": i.status || "",
+      "Running Balance": running
+    });
+  });
+
+  rows.push({
+    "SPO #": po.poNo,
+    "PO Description": po.description || "",
+    "Vendor": po.vendor || "",
+    "Invoice #": "SUMMARY",
+    "Vendor Name": "",
+    "Invoice Amount": sum(invoices.map(i => Number(i.amount || 0))),
+    "Date Entered": "",
+    "Due Date": "",
+    "Status": "TOTAL HISTORICAL/PAID",
+    "Running Balance": running
+  });
   const safeDesc = (po.description||"NA").replace(/[^a-zA-Z0-9\-_]/g,"");
   const safeVendor = (po.vendor||"NA").replace(/[^a-zA-Z0-9\-_]/g,"");
   exportRows(`SPO_Tracking_${po.poNo}_${safeDesc}_${safeVendor}_${today()}.xlsx`, rows);
@@ -1488,8 +1628,80 @@ function filteredRowsByUser(rows) {
 function rowMatchesDivisions(row, divs) {
   if (row.division && divs.includes(String(row.division))) return true;
   if (row.lines && row.lines.some(l => divs.includes(String(l.division)))) return true;
+  if (row.poNo) {
+    const po = state.data.purchaseOrders.find(p => String(p.poNo) === String(row.poNo));
+    if (po?.lines?.some(l => divs.includes(String(l.division)))) return true;
+  }
   return false;
 }
+
+window.editPO = function(poNo) {
+  const po = state.data.purchaseOrders.find(p => String(p.poNo) === String(poNo));
+  if (!po) return;
+  const vendor = prompt("Vendor name:", po.vendor || "");
+  if (vendor === null) return;
+  const desc = prompt("PO description:", po.description || "");
+  if (desc === null) return;
+  po.vendor = vendor;
+  po.description = desc;
+
+  if ((po.lines || []).length) {
+    const idxRaw = prompt(`Line to edit (1-${po.lines.length}), or blank to skip line edit:`, "");
+    if (idxRaw) {
+      const idx = Number(idxRaw) - 1;
+      if (idx >= 0 && idx < po.lines.length) {
+        const line = po.lines[idx];
+        const division = prompt("Division:", line.division || "");
+        if (division === null) return;
+        const account = prompt("Account #:", line.account || "");
+        if (account === null) return;
+        const amount = prompt("Amount:", String(line.amount || 0));
+        if (amount === null) return;
+        line.division = String(division).trim();
+        line.account = String(account).trim();
+        line.amount = Number(amount || 0);
+      }
+    }
+  }
+  saveState();
+  renderAll();
+  toast("PO updated.");
+};
+
+window.editInvoice = function(invoiceNo) {
+  const inv = state.data.invoices.find(i => String(i.invoiceNo) === String(invoiceNo));
+  if (!inv) return;
+  const amount = prompt("Amount:", String(inv.amount || 0));
+  if (amount === null) return;
+  const status = prompt("Status (Historical/Pending/Paid/Void):", inv.status || "");
+  if (status === null) return;
+  const poNo = prompt("PO # (blank for basic invoice):", inv.poNo || "");
+  if (poNo === null) return;
+  const division = prompt("Division:", inv.division || "");
+  if (division === null) return;
+  const poLineKey = prompt("PO Line Key (division|account|index), optional:", inv.poLineKey || "");
+  if (poLineKey === null) return;
+  const approvalRequired = prompt("Approval required? (yes/no):", inv.approvalRequired || "no");
+  if (approvalRequired === null) return;
+
+  inv.amount = Number(amount || 0);
+  inv.status = status;
+  inv.poNo = String(poNo).trim();
+  inv.division = String(division).trim();
+  inv.poLineKey = String(poLineKey).trim();
+  inv.type = inv.poNo ? "po" : "basic";
+  inv.approvalRequired = String(approvalRequired).toLowerCase() === "yes" ? "yes" : "no";
+
+  if (inv.approvalRequired === "no") {
+    state.data.invoiceApprovals
+      .filter(a => a.invoiceNo === inv.invoiceNo && a.status === "pending")
+      .forEach(a => { a.status = "cancelled"; });
+  }
+
+  saveState();
+  renderAll();
+  toast("Invoice updated.");
+};
 
 function fileToRows(file) {
   return new Promise(resolve => {
