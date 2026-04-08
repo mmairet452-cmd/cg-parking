@@ -601,7 +601,7 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch(e) {}
-  return { budgets: [], purchaseOrders: [], invoices: [], revenue: [], pbpParkMobile: [], invoiceApprovals: [] };
+  return { budgets: [], purchaseOrders: [], invoices: [], revenue: [], pbpParkMobile: [], invoiceApprovals: [], poChanges: [] };
 }
 
 function saveState() {
@@ -703,7 +703,7 @@ function renderDashboard() {
   const invs = filteredRowsByUser(state.data.invoices);
 
   const totalBudget = sum(budgets.map(r => Number(r.budget || 0)));
-  const poTotal = sum(pos.flatMap(po => po.lines||[]).map(l => Number(l.amount||0)));
+  const poTotal = sum(pos.flatMap(po => po.lines||[]).map(l => lineTotal(l)));
   const invTotal = sum(invs.map(i => Number(i.amount||0)));
   const budgetBal = totalBudget - poTotal;
   const poBal = poTotal - invTotal;
@@ -743,8 +743,10 @@ function divisionSummaryCard(budgets, pos, invs) {
     divMap[d].budget += Number(b.budget||0);
   });
   pos.flatMap(po => po.lines||[]).forEach(l => {
-    const d = String(l.division);
-    if (divMap[d]) divMap[d].committed += Number(l.amount||0);
+    getLineAllocations(l).forEach(a => {
+      const d = String(a.division);
+      if (divMap[d]) divMap[d].committed += Number(a.amount||0);
+    });
   });
   invs.forEach(i => {
     const d = String(i.division);
@@ -1045,13 +1047,15 @@ function renderManage() {
               <option>Historical</option><option>Pending</option><option>Paid</option><option>Void</option>
             </select>
           </label>
-          <label>Approval Required?
+          <label>Needs Approval?
             <select name="approvalRequired">
               <option value="no">No Approval Needed</option>
               <option value="yes">Yes</option>
             </select>
           </label>
-          <label>Send for Approval <select name="approvalTo">${supOpts}</select></label>
+          <label>If yes, who?
+            <select name="approvalTo" id="singleInvoiceApprovalTo">${supOpts}</select>
+          </label>
           <button class="btn green" type="submit">Save Invoice</button>
         </form>
       </div>
@@ -1064,9 +1068,16 @@ function renderManage() {
           <label>PO # <input name="poNo" required></label>
           <label>Vendor Name <input name="vendor" required></label>
           <label>Description <input name="description"></label>
-          <label>Division <select name="division">${divOpts}</select></label>
-          <label>Account # <input name="account" placeholder="e.g. 3118"></label>
-          <label>Amount ($) <input name="amount" type="number" step="0.01" required></label>
+          <div style="grid-column:1/-1;border:1px solid var(--line);border-radius:8px;padding:10px">
+            <strong>PO Lines and Account Allocations</strong>
+            <p class="muted" style="margin:6px 0 10px">
+              Add one or more lines. Each line can contain multiple division-account allocations.<br>
+              Format per line: <code>division-account:amount; division-account:amount</code><br>
+              Example: <code>8101-4600:12000; 8103-4600:12000; 8105-4600:12000</code>
+            </p>
+            <div id="poLineBuilder"></div>
+            <button class="btn sm" id="addPoLineBtn" type="button">+ Add PO Line</button>
+          </div>
           <button class="btn green" type="submit">Save PO</button>
         </form>
       </div>
@@ -1081,6 +1092,34 @@ function renderManage() {
           <button class="btn danger sm" style="margin-top:8px" onclick="clearAllData()">⚠️ Clear ALL Data</button>
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h3>🔁 PO Change Request (Admin)</h3>
+      <p class="muted">Use this to increase/decrease a specific PO line allocation without recreating the PO.</p>
+      <form id="poChangeForm" class="form-grid">
+        <label>PO #
+          <input id="poChangePoNo" name="poNo" placeholder="e.g. 13320" required>
+        </label>
+        <label>PO Allocation
+          <select id="poChangeAllocKey" name="allocKey">
+            <option value="">— Enter PO # first —</option>
+          </select>
+        </label>
+        <label>Change Type
+          <select name="changeType">
+            <option value="increase">Add Funds</option>
+            <option value="decrease">Decrease Funds</option>
+          </select>
+        </label>
+        <label>Amount
+          <input name="amount" type="number" min="0" step="0.01" required>
+        </label>
+        <label style="grid-column:1/-1">Reason
+          <input name="reason" placeholder="Change reason / reference">
+        </label>
+        <button class="btn green" type="submit">Apply Change Request</button>
+      </form>
     </div>
   `;
 
@@ -1121,15 +1160,42 @@ function renderManage() {
     if (poLineSel) poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
   };
 
+  const approvalReqSel = document.querySelector('#singleInvoiceForm select[name="approvalRequired"]');
+  const approvalToSel = document.getElementById("singleInvoiceApprovalTo");
+  const syncApprovalSelect = () => {
+    const needs = (approvalReqSel?.value || "no") === "yes";
+    if (approvalToSel) approvalToSel.disabled = !needs;
+  };
+  if (approvalReqSel) {
+    approvalReqSel.addEventListener("change", syncApprovalSelect);
+    syncApprovalSelect();
+  }
+
   document.getElementById("singlePOForm").onsubmit = e => {
     e.preventDefault();
     const f = new FormData(e.target);
     const row = Object.fromEntries(f.entries());
     if (state.data.purchaseOrders.some(p => p.poNo === row.poNo)) { toast("PO # already exists.", "error"); return; }
-    state.data.purchaseOrders.push({ poNo: row.poNo, vendor: row.vendor, description: row.description, status: "active", lines: [{ division: row.division, account: row.account, amount: Number(row.amount) }] });
+    const lineRows = [...document.querySelectorAll(".po-line-row")];
+    const lines = lineRows.map((lineEl, idx) => {
+      const lineNo = lineEl.querySelector(".po-line-no")?.value?.trim() || String(idx + 1);
+      const allocText = lineEl.querySelector(".po-line-alloc")?.value || "";
+      const allocations = parseAllocationsText(allocText);
+      const amount = sum(allocations.map(a => Number(a.amount || 0)));
+      return {
+        lineNo,
+        allocations,
+        amount,
+        division: allocations[0]?.division || "",
+        account: allocations[0]?.account || ""
+      };
+    }).filter(l => l.allocations.length > 0);
+    if (!lines.length) { toast("Add at least one valid PO line allocation.", "error"); return; }
+    state.data.purchaseOrders.push({ poNo: row.poNo, vendor: row.vendor, description: row.description, status: "active", lines });
     saveState();
     toast("PO saved.");
     e.target.reset();
+    renderManage();
   };
 
   const poNoInput = document.getElementById("singleInvoicePoNo");
@@ -1141,12 +1207,90 @@ function renderManage() {
       poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
       return;
     }
-    poLineSel.innerHTML = `<option value="">— Not specified —</option>` + (po.lines || []).map((l, idx) => {
-      const key = `${l.division || ""}|${l.account || ""}|${idx}`;
-      return `<option value="${key}">Line ${idx + 1}: Div ${l.division || "?"} / Acct ${l.account || "?"} / ${fmt(l.amount || 0)}</option>`;
+    poLineSel.innerHTML = `<option value="">— Not specified —</option>` + (po.lines || []).flatMap((l, idx) => {
+      return getLineAllocations(l).map((a, aIdx) => {
+        const key = `${a.division || ""}|${a.account || ""}|${idx}:${aIdx}`;
+        return `<option value="${key}">Line ${l.lineNo || (idx + 1)}: Div ${a.division || "?"} / Acct ${a.account || "?"} / ${fmt(a.amount || 0)}</option>`;
+      });
     }).join("");
   };
   if (poNoInput) poNoInput.addEventListener("input", refreshPoLineOptions);
+
+  const poChangePoNo = document.getElementById("poChangePoNo");
+  const poChangeAllocKey = document.getElementById("poChangeAllocKey");
+  const refreshPoChangeAllocOptions = () => {
+    const poNo = String(poChangePoNo?.value || "").trim();
+    const po = state.data.purchaseOrders.find(p => String(p.poNo) === poNo);
+    if (!po) {
+      poChangeAllocKey.innerHTML = `<option value="">— Enter PO # first —</option>`;
+      return;
+    }
+    poChangeAllocKey.innerHTML = (po.lines || []).flatMap((l, idx) =>
+      getLineAllocations(l).map((a, aIdx) => {
+        const key = `${idx}:${aIdx}`;
+        return `<option value="${key}">Line ${l.lineNo || (idx + 1)} - Div ${a.division} / Acct ${a.account} / ${fmt(a.amount)}</option>`;
+      })
+    ).join("") || `<option value="">— No allocations in this PO —</option>`;
+  };
+  if (poChangePoNo) poChangePoNo.addEventListener("input", refreshPoChangeAllocOptions);
+
+  document.getElementById("poChangeForm").onsubmit = e => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const row = Object.fromEntries(f.entries());
+    const po = state.data.purchaseOrders.find(p => String(p.poNo) === String(row.poNo).trim());
+    if (!po) return toast("PO not found.", "error");
+    const [lineIdxRaw, allocIdxRaw] = String(row.allocKey || "").split(":");
+    const lineIdx = Number(lineIdxRaw);
+    const allocIdx = Number(allocIdxRaw);
+    const line = po.lines?.[lineIdx];
+    if (!line) return toast("PO line not found.", "error");
+    if (!Array.isArray(line.allocations) || !line.allocations[allocIdx]) return toast("PO allocation not found.", "error");
+
+    const delta = Number(row.amount || 0) * (row.changeType === "decrease" ? -1 : 1);
+    const current = Number(line.allocations[allocIdx].amount || 0);
+    const next = current + delta;
+    if (next < 0) return toast("Change exceeds allocation balance.", "error");
+
+    line.allocations[allocIdx].amount = next;
+    line.amount = sum(getLineAllocations(line).map(a => Number(a.amount || 0)));
+    state.data.poChanges = state.data.poChanges || [];
+    state.data.poChanges.push({
+      id: `${po.poNo}-${Date.now()}`,
+      poNo: po.poNo,
+      lineNo: line.lineNo || (lineIdx + 1),
+      division: line.allocations[allocIdx].division,
+      account: line.allocations[allocIdx].account,
+      changeType: row.changeType,
+      amount: Number(row.amount || 0),
+      delta,
+      reason: row.reason || "",
+      changedBy: state.user?.id || "Administrator",
+      changedAt: new Date().toISOString()
+    });
+    saveState();
+    toast("PO change request applied.");
+    e.target.reset();
+    refreshPoChangeAllocOptions();
+    renderAll();
+  };
+
+  const poLineBuilder = document.getElementById("poLineBuilder");
+  const addPoLineBtn = document.getElementById("addPoLineBtn");
+  const addPoLineRow = (seed = "") => {
+    const row = document.createElement("div");
+    row.className = "po-line-row";
+    row.style.cssText = "display:grid;grid-template-columns:120px 1fr auto;gap:8px;margin-bottom:8px";
+    row.innerHTML = `
+      <input class="po-line-no" placeholder="Line #" value="">
+      <input class="po-line-alloc" placeholder="8101-3118:1000; 8102-4600:500" value="${seed}">
+      <button type="button" class="btn sm danger po-line-remove">Remove</button>
+    `;
+    row.querySelector(".po-line-remove").addEventListener("click", () => row.remove());
+    poLineBuilder.appendChild(row);
+  };
+  addPoLineBtn.addEventListener("click", () => addPoLineRow(""));
+  addPoLineRow("");
 }
 
 window.clearDataSet = function(key) {
@@ -1158,7 +1302,7 @@ window.clearDataSet = function(key) {
 
 window.clearAllData = function() {
   if (!confirm("Clear ALL data from this app? This cannot be undone.")) return;
-  state.data = { budgets: [], purchaseOrders: [], invoices: [], revenue: [], pbpParkMobile: [], invoiceApprovals: [] };
+  state.data = { budgets: [], purchaseOrders: [], invoices: [], revenue: [], pbpParkMobile: [], invoiceApprovals: [], poChanges: [] };
   saveState();
   toast("All data cleared.");
 };
@@ -1224,11 +1368,11 @@ function renderPOTracker() {
   const filterVendor = target.querySelector("#poFilterVendor")?.value || "";
 
   let pos = filteredRowsByUser(state.data.purchaseOrders);
-  if (filterDiv) pos = pos.filter(po => po.lines?.some(l => l.division === filterDiv));
+  if (filterDiv) pos = pos.filter(po => po.lines?.some(l => getLineAllocations(l).some(a => a.division === filterDiv)));
   if (filterVendor) pos = pos.filter(po => (po.vendor||"").toLowerCase().includes(filterVendor.toLowerCase()));
 
   const rows = pos.map(po => {
-    const poTotal = sum((po.lines||[]).map(l => Number(l.amount||0)));
+    const poTotal = sum((po.lines||[]).map(l => lineTotal(l)));
     const invTotal = sum(state.data.invoices.filter(i => String(i.poNo) === String(po.poNo)).map(i => Number(i.amount||0)));
     const bal = poTotal - invTotal;
     const pct = poTotal > 0 ? Math.min(100, Math.round(invTotal/poTotal*100)) : 0;
@@ -1236,7 +1380,7 @@ function renderPOTracker() {
       <td>${po.poNo}</td>
       <td>${po.vendor||""}</td>
       <td>${po.description||""}</td>
-      <td>${(po.lines||[]).map(l=>l.division).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}</td>
+      <td>${[...new Set((po.lines||[]).flatMap(l => getLineAllocations(l).map(a => a.division)).filter(Boolean))].join(", ")}</td>
       <td class="text-right">${fmt(poTotal)}</td>
       <td class="text-right">${fmt(invTotal)}</td>
       <td class="text-right ${bal < 0 ? "warn" : ""}">${fmt(bal)}</td>
@@ -1279,12 +1423,14 @@ function renderBudgetLines() {
   if (filterFY) budgets = budgets.filter(b => b.year === filterFY);
   if (filterAcct) budgets = budgets.filter(b => (b.account||"").includes(filterAcct) || (b.description||"").toLowerCase().includes(filterAcct.toLowerCase()));
 
-  const poLines = filteredRowsByUser(state.data.purchaseOrders).flatMap(p => p.lines||[]);
+  const poAllocs = filteredRowsByUser(state.data.purchaseOrders)
+    .flatMap(p => p.lines || [])
+    .flatMap(l => getLineAllocations(l));
   const basicInvs = filteredRowsByUser(state.data.invoices).filter(i => i.type === "basic");
 
   const totalBudget = sum(budgets.map(b=>Number(b.budget||0)));
   const rows = budgets.map(b => {
-    const poUsed = sum(poLines.filter(l => String(l.division)===String(b.division) && String(l.account)===String(b.account)).map(x=>Number(x.amount||0)));
+    const poUsed = sum(poAllocs.filter(l => String(l.division)===String(b.division) && String(l.account)===String(b.account)).map(x=>Number(x.amount||0)));
     const basicUsed = sum(basicInvs.filter(i => String(i.division)===String(b.division) && String(i.account||"")===String(b.account)).map(i=>Number(i.amount||0)));
     const committed = poUsed + basicUsed;
     const bal = Number(b.budget||0) - committed;
@@ -1490,7 +1636,7 @@ function exportSPOTracking() {
   const poNo = document.getElementById("exportPoNo").value.trim();
   const po = state.data.purchaseOrders.find(p => String(p.poNo) === poNo);
   if (!po) { toast("PO not found.", "error"); return; }
-  const poStartBalance = sum((po.lines || []).map(l => Number(l.amount || 0)));
+  const poStartBalance = sum((po.lines || []).map(l => lineTotal(l)));
   const invoices = state.data.invoices
     .filter(i => String(i.poNo) === poNo)
     .filter(i => ["historical", "paid"].includes(String(i.status || "").toLowerCase()))
@@ -1591,10 +1737,17 @@ async function restoreBackup() {
 }
 
 function flattenPOForExport(pos) {
-  return pos.flatMap(po => (po.lines||[]).map(l => ({
-    "PO #": po.poNo, "Vendor": po.vendor||"", "Description": po.description||"",
-    "Division": l.division, "Account #": l.account, "Amount": l.amount
-  })));
+  return pos.flatMap(po => (po.lines||[]).flatMap((l, idx) =>
+    getLineAllocations(l).map(a => ({
+      "PO #": po.poNo,
+      "Vendor": po.vendor || "",
+      "Description": po.description || "",
+      "PO Line #": l.lineNo || (idx + 1),
+      "Division": a.division,
+      "Account #": a.account,
+      "Amount": a.amount
+    }))
+  ));
 }
 
 function exportRows(fileName, rows) {
@@ -1627,12 +1780,48 @@ function filteredRowsByUser(rows) {
 
 function rowMatchesDivisions(row, divs) {
   if (row.division && divs.includes(String(row.division))) return true;
-  if (row.lines && row.lines.some(l => divs.includes(String(l.division)))) return true;
+  if (row.lines && row.lines.some(l => getLineAllocations(l).some(a => divs.includes(String(a.division))))) return true;
   if (row.poNo) {
     const po = state.data.purchaseOrders.find(p => String(p.poNo) === String(row.poNo));
-    if (po?.lines?.some(l => divs.includes(String(l.division)))) return true;
+    if (po?.lines?.some(l => getLineAllocations(l).some(a => divs.includes(String(a.division))))) return true;
   }
   return false;
+}
+
+function getLineAllocations(line) {
+  if (Array.isArray(line?.allocations) && line.allocations.length) {
+    return line.allocations.map(a => ({
+      division: String(a.division || "").trim(),
+      account: String(a.account || "").trim(),
+      amount: Number(a.amount || 0)
+    }));
+  }
+  return [{
+    division: String(line?.division || "").trim(),
+    account: String(line?.account || "").trim(),
+    amount: Number(line?.amount || 0)
+  }];
+}
+
+function lineTotal(line) {
+  return sum(getLineAllocations(line).map(a => Number(a.amount || 0)));
+}
+
+function parseAllocationsText(text) {
+  const chunks = String(text || "")
+    .split(";")
+    .map(s => s.trim())
+    .filter(Boolean);
+  const out = [];
+  chunks.forEach(chunk => {
+    const [left, right] = chunk.split(":").map(s => String(s || "").trim());
+    if (!left) return;
+    const [division, account] = left.split("-").map(s => String(s || "").trim());
+    const amount = Number(right || 0);
+    if (!division || !account || !Number.isFinite(amount)) return;
+    out.push({ division, account, amount });
+  });
+  return out;
 }
 
 window.editPO = function(poNo) {
