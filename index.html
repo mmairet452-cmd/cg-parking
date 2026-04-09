@@ -93,6 +93,8 @@ h3 { margin: 0 0 10px; font-size: 1rem; }
       <button class="nav-btn admin-only" data-page="managePage">✏️ Add / Manage</button>
       <button class="nav-btn admin-only" data-page="approvalPage">✅ Approval Queue</button>
       <button class="nav-btn" data-page="poPage">📦 PO Tracker</button>
+      <button class="nav-btn" data-page="basicInvoicePage">🧾 Basic Invoices</button>
+      <button class="nav-btn" data-page="poMonthlyInvoicePage">🗓️ PO Monthly Tracker</button>
       <button class="nav-btn" data-page="budgetPage">💰 Budget Lines</button>
       <button class="nav-btn" data-page="revenuePage">📈 PBP/ParkMobile</button>
       <button class="nav-btn admin-only" data-page="exportPage">📤 Export</button>
@@ -115,6 +117,8 @@ h3 { margin: 0 0 10px; font-size: 1rem; }
         <section id="managePage" class="page"></section>
         <section id="approvalPage" class="page"></section>
         <section id="poPage" class="page"></section>
+        <section id="basicInvoicePage" class="page"></section>
+        <section id="poMonthlyInvoicePage" class="page"></section>
         <section id="budgetPage" class="page"></section>
         <section id="revenuePage" class="page"></section>
         <section id="exportPage" class="page"></section>
@@ -639,6 +643,8 @@ function renderPage(page) {
     managePage: renderManage,
     approvalPage: renderApprovals,
     poPage: renderPOTracker,
+    basicInvoicePage: renderBasicInvoices,
+    poMonthlyInvoicePage: renderPOMonthlyInvoices,
     budgetPage: renderBudgetLines,
     revenuePage: renderRevenue,
     exportPage: renderExports
@@ -926,6 +932,7 @@ async function importPOFile(file) {
       po = {
         poNo,
         poType: String(r["PO Type"] || r["Type"] || "").trim(),
+        monthlyInvoiceTracked: ["yes","y","true","1"].includes(String(r["Monthly Invoice Tracker"] || r["Monthly Tracked"] || "").trim().toLowerCase()),
         vendor: String(r["Vendor Name"] || r["Vendor"] || ""),
         description: String(r["Description"] || ""),
         lines: [],
@@ -978,6 +985,7 @@ async function importInvoiceFile(file) {
     const status = String(r["Status"] || "").trim();
     const division = String(r["Division"] || r["division"] || "").trim();
     const poLineKey = String(r["PO Line"] || r["PO Line Key"] || "").trim();
+    const invoiceCategory = String(r["Invoice Category"] || r["Category"] || "general").trim().toLowerCase();
     const approvalRaw = String(r["Approval Required"] || r["Needs Approval"] || "no").trim().toLowerCase();
     const approvalRequired = ["yes", "y", "true", "1"].includes(approvalRaw) ? "yes" : "no";
     state.data.invoices.push({
@@ -989,6 +997,7 @@ async function importInvoiceFile(file) {
       type: poNo ? "po" : "basic",
       division,
       poLineKey,
+      invoiceCategory,
       approvalRequired
     });
     if (approvalRequired === "yes") {
@@ -1055,6 +1064,13 @@ function renderManage() {
           <label id="basicAccountWrap">Basic Division-Account
             <input name="basicDivisionAccount" id="basicDivisionAccount" placeholder="e.g. 8200-4600">
           </label>
+          <label>Invoice Category
+            <select name="invoiceCategory" id="singleInvoiceCategory">
+              <option value="general">General</option>
+              <option value="pbp">PBP</option>
+              <option value="parkmobile">ParkMobile</option>
+            </select>
+          </label>
           <label>Vendor Name <input name="vendorName"></label>
           <label>Division <select name="division"><option value="">— None —</option>${divOpts}</select></label>
           <label>Amount ($) <input name="amount" type="number" step="0.01" required></label>
@@ -1085,6 +1101,12 @@ function renderManage() {
         <form id="singlePOForm" class="form-grid">
           <label>PO # <input name="poNo" required></label>
           <label>PO Type <select name="poType">${poTypeOpts}</select></label>
+          <label>Monthly Invoice Tracker?
+            <select name="monthlyInvoiceTracked">
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
           <label>Vendor Name <input name="vendor" required></label>
           <label>Description <input name="description"></label>
           <div style="grid-column:1/-1;border:1px solid var(--line);border-radius:8px;padding:10px">
@@ -1189,6 +1211,7 @@ function renderManage() {
     row.amount = Number(row.amount);
     row.invoiceMode = String(row.invoiceMode || "po").toLowerCase();
     row.type = row.invoiceMode === "basic" ? "basic" : "po";
+    row.invoiceCategory = String(row.invoiceCategory || "general").toLowerCase();
     row.approvalRequired = (row.approvalRequired || "no").toLowerCase();
     if (row.type === "po") {
       if (row.poLineKey && !row.division) {
@@ -1269,7 +1292,15 @@ function renderManage() {
       };
     }).filter(l => l.allocations.length > 0);
     if (!lines.length) { toast("Add at least one valid PO line allocation.", "error"); return; }
-    state.data.purchaseOrders.push({ poNo: row.poNo, poType: row.poType || "", vendor: row.vendor, description: row.description, status: "active", lines });
+    state.data.purchaseOrders.push({
+      poNo: row.poNo,
+      poType: row.poType || "",
+      monthlyInvoiceTracked: row.monthlyInvoiceTracked === "yes",
+      vendor: row.vendor,
+      description: row.description,
+      status: "active",
+      lines
+    });
     saveState();
     toast("PO saved.");
     e.target.reset();
@@ -1626,37 +1657,34 @@ window.renderBudgetLines = renderBudgetLines;
 // ─── REVENUE ─────────────────────────────────────────────────
 function renderRevenue() {
   const target = document.getElementById("revenuePage");
-  const pm = state.data.pbpParkMobile;
-  const rows = FISCAL_YEARS.map(y => {
-    const yRows = pm.filter(r => r.year === y);
-    const pbp = sum(yRows.filter(x=>x.type==="PBP").map(x=>Number(x.amount||0)));
-    const park = sum(yRows.filter(x=>x.type==="ParkMobile").map(x=>Number(x.amount||0)));
-    return `<tr><td>${y}</td><td class="text-right">${fmt(pbp)}</td><td class="text-right">${fmt(park)}</td><td class="text-right">${fmt(pbp+park)}</td></tr>`;
+  const selectedFY = target.querySelector("#pmFySelect")?.value || CURRENT_FY;
+  const pmInvoices = filteredRowsByUser(state.data.invoices).filter(i => {
+    const c = String(i.invoiceCategory || "").toLowerCase();
+    return c === "pbp" || c === "parkmobile";
+  });
+  const fyInvoices = pmInvoices.filter(i => getFiscalYearFromDate(i.dueDate || i.date) === selectedFY);
+  const months = fiscalMonthsForYear(selectedFY);
+  const rows = months.map(m => {
+    const mRows = fyInvoices.filter(i => getFiscalMonthLabel(i.dueDate || i.date, selectedFY) === m.key);
+    const pbp = sum(mRows.filter(i => String(i.invoiceCategory).toLowerCase() === "pbp").map(i => Number(i.amount || 0)));
+    const park = sum(mRows.filter(i => String(i.invoiceCategory).toLowerCase() === "parkmobile").map(i => Number(i.amount || 0)));
+    return `<tr><td>${m.label}</td><td class="text-right">${fmt(pbp)}</td><td class="text-right">${fmt(park)}</td><td class="text-right">${fmt(pbp + park)}</td></tr>`;
   }).join("");
-
-  // Revenue import data table
-  const revRows = state.data.revenue.slice(0,100).map(r => {
-    const keys = Object.keys(r);
-    return `<tr>${keys.map(k=>`<td>${r[k]}</td>`).join("")}</tr>`;
-  }).join("");
-  const revHeaders = state.data.revenue.length > 0 ? Object.keys(state.data.revenue[0]).map(k=>`<th>${k}</th>`).join("") : "";
 
   target.innerHTML = `
     <div class="card">
-      <h2>PBP / ParkMobile Revenue Tracker</h2>
+      <h2>PBP / ParkMobile Invoice Tracker</h2>
+      <div class="filter-bar">
+        <label>Fiscal Year
+          <select id="pmFySelect" onchange="renderRevenue()">${FISCAL_YEARS.map(y => `<option${y===selectedFY?" selected":""}>${y}</option>`).join("")}</select>
+        </label>
+      </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Fiscal Year</th><th>PBP</th><th>ParkMobile</th><th>Total</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <thead><tr><th>Month</th><th>PBP</th><th>ParkMobile</th><th>Total</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='4'>No PBP/ParkMobile invoices for selected fiscal year.</td></tr>"}</tbody>
       </table></div>
+      <p class="muted" style="margin-top:8px">${fyInvoices.length} invoices in ${selectedFY}</p>
     </div>
-    ${state.data.revenue.length > 0 ? `
-    <div class="card">
-      <h3>Imported Revenue Data <span class="muted">(${state.data.revenue.length} rows)</span></h3>
-      <div class="table-wrap" style="max-height:400px;overflow-y:auto"><table>
-        <thead><tr>${revHeaders}</tr></thead>
-        <tbody>${revRows}</tbody>
-      </table></div>
-    </div>` : ""}
   `;
 }
 
@@ -1709,6 +1737,73 @@ function renderInvoices() {
   if (filterVendor) target.querySelector("#invFilterVendor").value = filterVendor;
 }
 window.renderInvoices = renderInvoices;
+
+function renderBasicInvoices() {
+  const target = document.getElementById("basicInvoicePage");
+  const divOpts = `<option value="">All Divisions</option>` + divisionMatrix.map(d=>`<option value="${d.division}">${d.division}</option>`).join("");
+  const filterDiv = target.querySelector("#basicInvDiv")?.value || "";
+  const filterCat = target.querySelector("#basicInvCat")?.value || "";
+  let invs = filteredRowsByUser(state.data.invoices).filter(i => String(i.type) === "basic");
+  if (filterDiv) invs = invs.filter(i => String(i.division) === filterDiv);
+  if (filterCat) invs = invs.filter(i => String(i.invoiceCategory || "general") === filterCat);
+  const rows = invs.map(i => `<tr>
+    <td>${i.invoiceNo}</td><td>${i.vendorName || ""}</td><td>${i.division || ""}</td><td>${i.account || ""}</td>
+    <td>${i.invoiceCategory || "general"}</td><td class="text-right">${fmt(i.amount || 0)}</td><td>${i.date || ""}</td><td>${i.status || ""}</td>
+  </tr>`).join("");
+  target.innerHTML = `
+    <div class="card">
+      <h2>Basic Invoice Tracker (Division Scoped)</h2>
+      <div class="filter-bar">
+        <label>Division <select id="basicInvDiv" onchange="renderBasicInvoices()">${divOpts}</select></label>
+        <label>Category
+          <select id="basicInvCat" onchange="renderBasicInvoices()">
+            <option value="">All</option><option value="general">General</option><option value="pbp">PBP</option><option value="parkmobile">ParkMobile</option>
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Invoice #</th><th>Vendor</th><th>Division</th><th>Account</th><th>Category</th><th>Amount</th><th>Date</th><th>Status</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='8'>No basic invoices.</td></tr>"}</tbody>
+      </table></div>
+    </div>
+  `;
+  if (filterDiv) target.querySelector("#basicInvDiv").value = filterDiv;
+  if (filterCat) target.querySelector("#basicInvCat").value = filterCat;
+}
+window.renderBasicInvoices = renderBasicInvoices;
+
+function renderPOMonthlyInvoices() {
+  const target = document.getElementById("poMonthlyInvoicePage");
+  const selectedFY = target.querySelector("#poMonthFy")?.value || CURRENT_FY;
+  const trackedPoNos = new Set(
+    filteredRowsByUser(state.data.purchaseOrders)
+      .filter(p => !!p.monthlyInvoiceTracked)
+      .map(p => String(p.poNo))
+  );
+  const invs = filteredRowsByUser(state.data.invoices)
+    .filter(i => i.poNo && trackedPoNos.has(String(i.poNo)))
+    .filter(i => getFiscalYearFromDate(i.dueDate || i.date) === selectedFY);
+  const months = fiscalMonthsForYear(selectedFY);
+  const rows = months.map(m => {
+    const mRows = invs.filter(i => getFiscalMonthLabel(i.dueDate || i.date, selectedFY) === m.key);
+    return `<tr><td>${m.label}</td><td>${mRows.length}</td><td class="text-right">${fmt(sum(mRows.map(i => Number(i.amount || 0))))}</td></tr>`;
+  }).join("");
+  target.innerHTML = `
+    <div class="card">
+      <h2>PO Monthly Invoice Tracker</h2>
+      <div class="filter-bar">
+        <label>Fiscal Year
+          <select id="poMonthFy" onchange="renderPOMonthlyInvoices()">${FISCAL_YEARS.map(y => `<option${y===selectedFY?" selected":""}>${y}</option>`).join("")}</select>
+        </label>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Month</th><th>Invoices</th><th>Total</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='3'>No monthly PO-tracked invoices.</td></tr>"}</tbody>
+      </table></div>
+    </div>
+  `;
+}
+window.renderPOMonthlyInvoices = renderPOMonthlyInvoices;
 
 // ─── EXPORTS ─────────────────────────────────────────────────
 function renderExports() {
@@ -1949,6 +2044,55 @@ function invoiceBelongsToDivisions(inv, divSet) {
   const fromLine = String(inv?.poLineKey || "").split("|")[0]?.trim();
   if (fromLine && divSet.has(fromLine)) return true;
   return false;
+}
+
+function toDateSafe(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (!Number.isNaN(d.getTime())) return d;
+  const txt = String(value).trim();
+  const m = txt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    const mm = Number(m[1]) - 1;
+    const dd = Number(m[2]);
+    const yy = Number(m[3].length === 2 ? `20${m[3]}` : m[3]);
+    const d2 = new Date(yy, mm, dd);
+    if (!Number.isNaN(d2.getTime())) return d2;
+  }
+  return null;
+}
+
+function getFiscalYearFromDate(value) {
+  const d = toDateSafe(value);
+  if (!d) return CURRENT_FY;
+  const y = d.getFullYear();
+  const m = d.getMonth(); // 0=Jan
+  return m >= 9 ? `FY${String(y + 1).slice(-2)}` : `FY${String(y).slice(-2)}`;
+}
+
+function fiscalMonthsForYear(fy) {
+  const endYY = Number(String(fy).replace("FY", ""));
+  const startYear = 2000 + endYY - 1;
+  const labels = [
+    { month: 9, label: "Oct" }, { month: 10, label: "Nov" }, { month: 11, label: "Dec" },
+    { month: 0, label: "Jan" }, { month: 1, label: "Feb" }, { month: 2, label: "Mar" },
+    { month: 3, label: "Apr" }, { month: 4, label: "May" }, { month: 5, label: "Jun" },
+    { month: 6, label: "Jul" }, { month: 7, label: "Aug" }, { month: 8, label: "Sep" }
+  ];
+  return labels.map((m, idx) => {
+    const year = idx < 3 ? startYear : (startYear + 1);
+    return { key: `${year}-${String(m.month + 1).padStart(2, "0")}`, label: `${m.label} ${year}` };
+  });
+}
+
+function getFiscalMonthLabel(value, fy) {
+  const d = toDateSafe(value);
+  if (!d) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const key = `${year}-${month}`;
+  const inFy = fiscalMonthsForYear(fy).find(m => m.key === key);
+  return inFy ? inFy.key : "";
 }
 
 function rowMatchesDivisions(row, divs) {
