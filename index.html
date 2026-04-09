@@ -574,6 +574,7 @@ const divisionMatrix = [
 const DIVISIONS = divisionMatrix.map(d => d.division);
 const FISCAL_YEARS = ["FY24","FY25","FY26","FY27","FY28","FY29","FY30"];
 const CURRENT_FY = "FY26";
+const PO_TYPES = ["CNT1","CNT2","PBK1","PBK2","SLS1","SLS2","EXE1","EXE2","SPO1","SPO2"];
 
 const roles = [
   { id: "Administrator", type: "admin", password: "admin123" },
@@ -922,7 +923,14 @@ async function importPOFile(file) {
 
     let po = state.data.purchaseOrders.find(p => p.poNo === poNo);
     if (!po) {
-      po = { poNo, vendor: String(r["Vendor Name"] || r["Vendor"] || ""), description: String(r["Description"] || ""), lines: [], status: "active" };
+      po = {
+        poNo,
+        poType: String(r["PO Type"] || r["Type"] || "").trim(),
+        vendor: String(r["Vendor Name"] || r["Vendor"] || ""),
+        description: String(r["Description"] || ""),
+        lines: [],
+        status: "active"
+      };
       state.data.purchaseOrders.push(po);
       added++;
     }
@@ -1013,6 +1021,7 @@ function renderManage() {
   const divOpts = divisionMatrix.map(d => `<option value="${d.division}">${d.division} – ${d.name}</option>`).join("");
   const supOpts = roles.filter(r => r.type === "supervisor").map(r => `<option>${r.id}</option>`).join("");
   const fyOpts = FISCAL_YEARS.map(y => `<option${y===CURRENT_FY?" selected":""}>${y}</option>`).join("");
+  const poTypeOpts = PO_TYPES.map(t => `<option value="${t}">${t}</option>`).join("");
 
   target.innerHTML = `
     <div class="split">
@@ -1066,6 +1075,7 @@ function renderManage() {
         <h3>➕ Add Purchase Order</h3>
         <form id="singlePOForm" class="form-grid">
           <label>PO # <input name="poNo" required></label>
+          <label>PO Type <select name="poType">${poTypeOpts}</select></label>
           <label>Vendor Name <input name="vendor" required></label>
           <label>Description <input name="description"></label>
           <div style="grid-column:1/-1;border:1px solid var(--line);border-radius:8px;padding:10px">
@@ -1096,7 +1106,7 @@ function renderManage() {
 
     <div class="card">
       <h3>🔁 PO Change Request (Admin)</h3>
-      <p class="muted">Use this to increase/decrease a specific PO line allocation without recreating the PO.</p>
+      <p class="muted">Use this to increase/decrease/reset/add/delete specific PO allocations and lines.</p>
       <form id="poChangeForm" class="form-grid">
         <label>PO #
           <input id="poChangePoNo" name="poNo" placeholder="e.g. 13320" required>
@@ -1110,6 +1120,10 @@ function renderManage() {
           <select name="changeType">
             <option value="increase">Add Funds</option>
             <option value="decrease">Decrease Funds</option>
+            <option value="reset">Reset Allocation To Zero</option>
+            <option value="add-allocation">Add Allocation To Existing Line</option>
+            <option value="delete-allocation">Delete Allocation</option>
+            <option value="add-line">Add Entire Line</option>
           </select>
         </label>
         <label>Amount
@@ -1118,8 +1132,33 @@ function renderManage() {
         <label style="grid-column:1/-1">Reason
           <input name="reason" placeholder="Change reason / reference">
         </label>
+        <label>New/Target Division (for add-allocation/add-line)
+          <select name="newDivision"><option value="">— Select —</option>${divOpts}</select>
+        </label>
+        <label>New/Target Account (for add-allocation/add-line)
+          <input name="newAccount" placeholder="e.g. 4600">
+        </label>
+        <label>New Line # (optional for add-line)
+          <input name="newLineNo" placeholder="e.g. 7">
+        </label>
         <button class="btn green" type="submit">Apply Change Request</button>
       </form>
+      <div class="table-wrap" style="margin-top:10px"><table>
+        <thead><tr><th>Date</th><th>PO #</th><th>Line</th><th>Division</th><th>Account</th><th>Type</th><th>Amount</th><th>Reason</th><th>By</th></tr></thead>
+        <tbody>
+          ${(state.data.poChanges || []).slice(-60).reverse().map(c => `<tr>
+            <td>${new Date(c.changedAt || "").toLocaleString()}</td>
+            <td>${c.poNo || ""}</td>
+            <td>${c.lineNo || ""}</td>
+            <td>${c.division || ""}</td>
+            <td>${c.account || ""}</td>
+            <td>${c.changeType || ""}</td>
+            <td class="text-right">${fmt(c.delta ?? c.amount ?? 0)}</td>
+            <td>${c.reason || ""}</td>
+            <td>${c.changedBy || ""}</td>
+          </tr>`).join("") || "<tr><td colspan='9'>No PO changes yet.</td></tr>"}
+        </tbody>
+      </table></div>
     </div>
   `;
 
@@ -1191,7 +1230,7 @@ function renderManage() {
       };
     }).filter(l => l.allocations.length > 0);
     if (!lines.length) { toast("Add at least one valid PO line allocation.", "error"); return; }
-    state.data.purchaseOrders.push({ poNo: row.poNo, vendor: row.vendor, description: row.description, status: "active", lines });
+    state.data.purchaseOrders.push({ poNo: row.poNo, poType: row.poType || "", vendor: row.vendor, description: row.description, status: "active", lines });
     saveState();
     toast("PO saved.");
     e.target.reset();
@@ -1206,6 +1245,9 @@ function renderManage() {
     if (!po) {
       poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
       return;
+    }
+    if (String(po.poType || "") === "SPO1") {
+      toast("SPO1 selected: ORDERS and INVOICES must be under $1,000", "error");
     }
     poLineSel.innerHTML = `<option value="">— Not specified —</option>` + (po.lines || []).flatMap((l, idx) => {
       return getLineAllocations(l).map((a, aIdx) => {
@@ -1244,25 +1286,76 @@ function renderManage() {
     const lineIdx = Number(lineIdxRaw);
     const allocIdx = Number(allocIdxRaw);
     const line = po.lines?.[lineIdx];
-    if (!line) return toast("PO line not found.", "error");
-    if (!Array.isArray(line.allocations) || !line.allocations[allocIdx]) return toast("PO allocation not found.", "error");
+    const changeType = String(row.changeType || "increase");
+    const requestAmount = Number(row.amount || 0);
+    if (!line && changeType !== "add-line") return toast("PO line not found.", "error");
 
-    const delta = Number(row.amount || 0) * (row.changeType === "decrease" ? -1 : 1);
-    const current = Number(line.allocations[allocIdx].amount || 0);
-    const next = current + delta;
-    if (next < 0) return toast("Change exceeds allocation balance.", "error");
+    let delta = 0;
+    let targetDivision = "";
+    let targetAccount = "";
+    let targetLineNo = line?.lineNo || (lineIdx + 1);
 
-    line.allocations[allocIdx].amount = next;
-    line.amount = sum(getLineAllocations(line).map(a => Number(a.amount || 0)));
+    if (changeType === "add-line") {
+      const newDivision = String(row.newDivision || "").trim();
+      const newAccount = String(row.newAccount || "").trim();
+      const newAmount = Number(row.amount || 0);
+      if (!newDivision || !newAccount || newAmount < 0) return toast("For add-line, provide valid division/account/amount.", "error");
+      const newLine = {
+        lineNo: String(row.newLineNo || (po.lines.length + 1)),
+        allocations: [{ division: newDivision, account: newAccount, amount: newAmount }],
+        amount: newAmount,
+        division: newDivision,
+        account: newAccount
+      };
+      po.lines.push(newLine);
+      delta = newAmount;
+      targetDivision = newDivision;
+      targetAccount = newAccount;
+      targetLineNo = newLine.lineNo;
+    } else {
+      if (!Array.isArray(line.allocations) || !line.allocations[allocIdx]) return toast("PO allocation not found.", "error");
+      const alloc = line.allocations[allocIdx];
+      targetDivision = alloc.division;
+      targetAccount = alloc.account;
+      const current = Number(alloc.amount || 0);
+      if (changeType === "increase") {
+        delta = requestAmount;
+        alloc.amount = current + requestAmount;
+      } else if (changeType === "decrease") {
+        delta = -requestAmount;
+        const next = current - requestAmount;
+        if (next < 0) return toast("Change exceeds allocation balance.", "error");
+        alloc.amount = next;
+      } else if (changeType === "reset") {
+        delta = -current;
+        alloc.amount = 0;
+      } else if (changeType === "delete-allocation") {
+        delta = -current;
+        line.allocations.splice(allocIdx, 1);
+      } else if (changeType === "add-allocation") {
+        const newDivision = String(row.newDivision || "").trim();
+        const newAccount = String(row.newAccount || "").trim();
+        const newAmount = Number(row.amount || 0);
+        if (!newDivision || !newAccount || newAmount < 0) return toast("For add-allocation, provide valid division/account/amount.", "error");
+        line.allocations.push({ division: newDivision, account: newAccount, amount: newAmount });
+        delta = newAmount;
+        targetDivision = newDivision;
+        targetAccount = newAccount;
+      }
+      line.amount = sum(getLineAllocations(line).map(a => Number(a.amount || 0)));
+      if (line.allocations.length === 0) {
+        po.lines.splice(lineIdx, 1);
+      }
+    }
     state.data.poChanges = state.data.poChanges || [];
     state.data.poChanges.push({
       id: `${po.poNo}-${Date.now()}`,
       poNo: po.poNo,
-      lineNo: line.lineNo || (lineIdx + 1),
-      division: line.allocations[allocIdx].division,
-      account: line.allocations[allocIdx].account,
-      changeType: row.changeType,
-      amount: Number(row.amount || 0),
+      lineNo: targetLineNo,
+      division: targetDivision,
+      account: targetAccount,
+      changeType,
+      amount: requestAmount,
       delta,
       reason: row.reason || "",
       changedBy: state.user?.id || "Administrator",
@@ -1366,25 +1459,46 @@ function renderPOTracker() {
   const divOpts = `<option value="">All Divisions</option>` + divisionMatrix.map(d=>`<option value="${d.division}">${d.division} – ${d.name}</option>`).join("");
   const filterDiv = target.querySelector("#poFilterDiv")?.value || "";
   const filterVendor = target.querySelector("#poFilterVendor")?.value || "";
+  const userDivSet = getUserDivisionSet(state.user);
 
   let pos = filteredRowsByUser(state.data.purchaseOrders);
   if (filterDiv) pos = pos.filter(po => po.lines?.some(l => getLineAllocations(l).some(a => a.division === filterDiv)));
   if (filterVendor) pos = pos.filter(po => (po.vendor||"").toLowerCase().includes(filterVendor.toLowerCase()));
 
   const rows = pos.map(po => {
-    const poTotal = sum((po.lines||[]).map(l => lineTotal(l)));
-    const invTotal = sum(state.data.invoices.filter(i => String(i.poNo) === String(po.poNo)).map(i => Number(i.amount||0)));
+    const allAllocs = (po.lines || []).flatMap(l => getLineAllocations(l));
+    const visibleAllocs = state.user?.type === "supervisor"
+      ? allAllocs.filter(a => userDivSet.has(String(a.division)))
+      : allAllocs;
+    const poTotal = sum(visibleAllocs.map(a => Number(a.amount || 0)));
+    const invTotal = sum(
+      state.data.invoices
+        .filter(i => String(i.poNo) === String(po.poNo))
+        .filter(i => state.user?.type !== "supervisor" || invoiceBelongsToDivisions(i, userDivSet))
+        .map(i => Number(i.amount || 0))
+    );
     const bal = poTotal - invTotal;
     const pct = poTotal > 0 ? Math.min(100, Math.round(invTotal/poTotal*100)) : 0;
+    const divisionsShown = [...new Set(visibleAllocs.map(a => a.division).filter(Boolean))].join(", ");
+    const linesSummary = (po.lines || []).map((l, idx) => {
+      const al = getLineAllocations(l);
+      return `L${l.lineNo || (idx + 1)}: ` + al.map(a => `${a.division}-${a.account} ${fmt(a.amount)}`).join(" | ");
+    }).join("<br>");
+    const spoWarn = String(po.poType || "") === "SPO1"
+      ? `<span class="tag tag-red">SPO1: ORDERS and INVOICES must be under $1,000</span>`
+      : "";
     return `<tr>
       <td>${po.poNo}</td>
+      <td>${po.poType || ""}</td>
       <td>${po.vendor||""}</td>
       <td>${po.description||""}</td>
-      <td>${[...new Set((po.lines||[]).flatMap(l => getLineAllocations(l).map(a => a.division)).filter(Boolean))].join(", ")}</td>
+      <td>${divisionsShown}</td>
       <td class="text-right">${fmt(poTotal)}</td>
       <td class="text-right">${fmt(invTotal)}</td>
       <td class="text-right ${bal < 0 ? "warn" : ""}">${fmt(bal)}</td>
       <td>${pct}%</td>
+      <td>${spoWarn}</td>
+      <td>${state.user?.type === "admin" ? linesSummary : "Division-scoped"}</td>
       <td>${state.user?.type === "admin" ? `<button class="btn sm" onclick="editPO('${String(po.poNo).replace(/'/g, "\\'")}')">Edit</button>` : "—"}</td>
     </tr>`;
   }).join("");
@@ -1392,13 +1506,14 @@ function renderPOTracker() {
   target.innerHTML = `
     <div class="card">
       <h2>PO Tracker</h2>
+      ${state.user?.type === "supervisor" ? `<div class="warning-box" style="margin-bottom:8px">Supervisor view is division-scoped. Amounts and invoices shown are only for your divisions.</div>` : ""}
       <div class="filter-bar">
         <label>Division <select id="poFilterDiv" onchange="renderPOTracker()">${divOpts}</select></label>
         <label>Vendor Search <input id="poFilterVendor" placeholder="Type vendor name…" oninput="renderPOTracker()"></label>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>PO #</th><th>Vendor</th><th>Description</th><th>Divisions</th><th>PO Amount</th><th>Invoiced</th><th>Balance</th><th>Used %</th><th>Action</th></tr></thead>
-        <tbody>${rows || "<tr><td colspan='9'>No PO data.</td></tr>"}</tbody>
+        <thead><tr><th>PO #</th><th>Type</th><th>Vendor</th><th>Description</th><th>Divisions</th><th>PO Amount</th><th>Invoiced</th><th>Balance</th><th>Used %</th><th>Policy</th><th>PO Lines</th><th>Action</th></tr></thead>
+        <tbody>${rows || "<tr><td colspan='12'>No PO data.</td></tr>"}</tbody>
       </table></div>
       <p class="muted" style="margin-top:8px">${pos.length} POs shown</p>
     </div>`;
@@ -1778,6 +1893,25 @@ function filteredRowsByUser(rows) {
   return rows;
 }
 
+function getUserDivisionSet(user) {
+  if (!user) return new Set();
+  if (user.type === "supervisor") {
+    return new Set(divisionMatrix.filter(d => d.supervisor === user.id).map(d => String(d.division)));
+  }
+  if (user.type === "executive" && user.id !== "Monica") {
+    return new Set(divisionMatrix.filter(d => d.executive === user.id).map(d => String(d.division)));
+  }
+  return new Set(DIVISIONS.map(String));
+}
+
+function invoiceBelongsToDivisions(inv, divSet) {
+  const div = String(inv?.division || "").trim();
+  if (div && divSet.has(div)) return true;
+  const fromLine = String(inv?.poLineKey || "").split("|")[0]?.trim();
+  if (fromLine && divSet.has(fromLine)) return true;
+  return false;
+}
+
 function rowMatchesDivisions(row, divs) {
   if (row.division && divs.includes(String(row.division))) return true;
   if (row.lines && row.lines.some(l => getLineAllocations(l).some(a => divs.includes(String(a.division))))) return true;
@@ -1827,28 +1961,73 @@ function parseAllocationsText(text) {
 window.editPO = function(poNo) {
   const po = state.data.purchaseOrders.find(p => String(p.poNo) === String(poNo));
   if (!po) return;
+  const poType = prompt(`PO Type (${PO_TYPES.join(", ")}):`, po.poType || "");
+  if (poType === null) return;
   const vendor = prompt("Vendor name:", po.vendor || "");
   if (vendor === null) return;
   const desc = prompt("PO description:", po.description || "");
   if (desc === null) return;
+  po.poType = String(poType).trim() || po.poType || "";
   po.vendor = vendor;
   po.description = desc;
 
-  if ((po.lines || []).length) {
-    const idxRaw = prompt(`Line to edit (1-${po.lines.length}), or blank to skip line edit:`, "");
-    if (idxRaw) {
-      const idx = Number(idxRaw) - 1;
-      if (idx >= 0 && idx < po.lines.length) {
-        const line = po.lines[idx];
-        const division = prompt("Division:", line.division || "");
+  const action = prompt("PO line action? (edit-allocation / add-allocation / add-line / reset-allocation / delete-allocation / skip)", "skip");
+  if (action && action !== "skip") {
+    const lineIdxRaw = prompt(`Line number (1-${po.lines.length})`, "1");
+    if (lineIdxRaw === null) return;
+    const lineIdx = Number(lineIdxRaw) - 1;
+    if (action !== "add-line" && (lineIdx < 0 || lineIdx >= po.lines.length)) return;
+
+    if (action === "add-line") {
+      const division = prompt("New line division:", "");
+      if (division === null) return;
+      const account = prompt("New line account:", "");
+      if (account === null) return;
+      const amount = prompt("New line amount:", "0");
+      if (amount === null) return;
+      po.lines.push({
+        lineNo: String(po.lines.length + 1),
+        allocations: [{ division: String(division).trim(), account: String(account).trim(), amount: Number(amount || 0) }],
+        amount: Number(amount || 0),
+        division: String(division).trim(),
+        account: String(account).trim()
+      });
+    } else {
+      const line = po.lines[lineIdx];
+      const allocs = getLineAllocations(line);
+      const allocIdxRaw = prompt(`Allocation number (1-${allocs.length})`, "1");
+      if (allocIdxRaw === null) return;
+      const allocIdx = Number(allocIdxRaw) - 1;
+      if (allocIdx < 0 || allocIdx >= allocs.length) return;
+      line.allocations = line.allocations || allocs;
+      const alloc = line.allocations[allocIdx];
+
+      if (action === "edit-allocation") {
+        const division = prompt("Division:", alloc.division || "");
         if (division === null) return;
-        const account = prompt("Account #:", line.account || "");
+        const account = prompt("Account:", alloc.account || "");
         if (account === null) return;
-        const amount = prompt("Amount:", String(line.amount || 0));
+        const amount = prompt("Amount:", String(alloc.amount || 0));
         if (amount === null) return;
-        line.division = String(division).trim();
-        line.account = String(account).trim();
-        line.amount = Number(amount || 0);
+        alloc.division = String(division).trim();
+        alloc.account = String(account).trim();
+        alloc.amount = Number(amount || 0);
+      } else if (action === "add-allocation") {
+        const division = prompt("Division:", "");
+        if (division === null) return;
+        const account = prompt("Account:", "");
+        if (account === null) return;
+        const amount = prompt("Amount:", "0");
+        if (amount === null) return;
+        line.allocations.push({ division: String(division).trim(), account: String(account).trim(), amount: Number(amount || 0) });
+      } else if (action === "reset-allocation") {
+        alloc.amount = 0;
+      } else if (action === "delete-allocation") {
+        line.allocations.splice(allocIdx, 1);
+      }
+      line.amount = sum(getLineAllocations(line).map(a => Number(a.amount || 0)));
+      if ((line.allocations || []).length === 0) {
+        po.lines.splice(lineIdx, 1);
       }
     }
   }
