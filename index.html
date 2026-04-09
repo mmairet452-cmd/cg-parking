@@ -1040,11 +1040,20 @@ function renderManage() {
         <h3>➕ Add Invoice</h3>
         <form id="singleInvoiceForm" class="form-grid">
           <label>Invoice # <input name="invoiceNo" required></label>
+          <label>Invoice Mode
+            <select name="invoiceMode" id="singleInvoiceMode">
+              <option value="po">PO</option>
+              <option value="basic">Basic (No PO)</option>
+            </select>
+          </label>
           <label>PO # (optional) <input name="poNo" id="singleInvoicePoNo" placeholder="Leave blank if no PO"></label>
           <label>PO Line (optional)
             <select name="poLineKey" id="singleInvoicePoLine">
               <option value="">— Select PO first —</option>
             </select>
+          </label>
+          <label id="basicAccountWrap">Basic Division-Account
+            <input name="basicDivisionAccount" id="basicDivisionAccount" placeholder="e.g. 8200-4600">
           </label>
           <label>Vendor Name <input name="vendorName"></label>
           <label>Division <select name="division"><option value="">— None —</option>${divOpts}</select></label>
@@ -1178,12 +1187,25 @@ function renderManage() {
     const f = new FormData(e.target);
     const row = Object.fromEntries(f.entries());
     row.amount = Number(row.amount);
-    row.type = row.poNo ? "po" : "basic";
+    row.invoiceMode = String(row.invoiceMode || "po").toLowerCase();
+    row.type = row.invoiceMode === "basic" ? "basic" : "po";
     row.approvalRequired = (row.approvalRequired || "no").toLowerCase();
-    if (row.poLineKey && !row.division) {
-      const parts = String(row.poLineKey).split("|");
-      row.division = parts[0] || "";
-      row.account = row.account || parts[1] || "";
+    if (row.type === "po") {
+      if (row.poLineKey && !row.division) {
+        const parts = String(row.poLineKey).split("|");
+        row.division = parts[0] || "";
+        row.account = row.account || parts[1] || "";
+      }
+    } else {
+      row.poNo = "";
+      row.poLineKey = "";
+      const basic = parseDivisionAccountText(row.basicDivisionAccount || "");
+      if (!basic) {
+        toast("For Basic invoice, enter Division-Account like 8200-4600.", "error");
+        return;
+      }
+      row.division = basic.division;
+      row.account = basic.account;
     }
     if (state.data.invoices.some(i => i.invoiceNo === row.invoiceNo)) {
       toast("Invoice # already exists.", "error"); return;
@@ -1201,13 +1223,30 @@ function renderManage() {
 
   const approvalReqSel = document.querySelector('#singleInvoiceForm select[name="approvalRequired"]');
   const approvalToSel = document.getElementById("singleInvoiceApprovalTo");
+  const invoiceModeSel = document.getElementById("singleInvoiceMode");
+  const poNoField = document.getElementById("singleInvoicePoNo");
+  const poLineField = document.getElementById("singleInvoicePoLine");
+  const basicField = document.getElementById("basicDivisionAccount");
+  const basicWrap = document.getElementById("basicAccountWrap");
   const syncApprovalSelect = () => {
     const needs = (approvalReqSel?.value || "no") === "yes";
     if (approvalToSel) approvalToSel.disabled = !needs;
   };
+  const syncInvoiceMode = () => {
+    const mode = invoiceModeSel?.value || "po";
+    const isPO = mode === "po";
+    if (poNoField) poNoField.disabled = !isPO;
+    if (poLineField) poLineField.disabled = !isPO;
+    if (basicField) basicField.disabled = isPO;
+    if (basicWrap) basicWrap.style.opacity = isPO ? "0.55" : "1";
+  };
   if (approvalReqSel) {
     approvalReqSel.addEventListener("change", syncApprovalSelect);
     syncApprovalSelect();
+  }
+  if (invoiceModeSel) {
+    invoiceModeSel.addEventListener("change", syncInvoiceMode);
+    syncInvoiceMode();
   }
 
   document.getElementById("singlePOForm").onsubmit = e => {
@@ -1956,6 +1995,18 @@ function parseAllocationsText(text) {
     out.push({ division, account, amount });
   });
   return out;
+}
+
+function parseDivisionAccountText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  const clean = raw.replaceAll("/", "-").replaceAll(" ", "");
+  const parts = clean.split("-");
+  if (parts.length < 2) return null;
+  const division = String(parts[0] || "").trim();
+  const account = String(parts[1] || "").trim();
+  if (!division || !account) return null;
+  return { division, account };
 }
 
 window.editPO = function(poNo) {
