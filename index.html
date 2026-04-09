@@ -1529,6 +1529,7 @@ function renderPOTracker() {
   const divOpts = `<option value="">All Divisions</option>` + divisionMatrix.map(d=>`<option value="${d.division}">${d.division} – ${d.name}</option>`).join("");
   const filterDiv = target.querySelector("#poFilterDiv")?.value || "";
   const filterVendor = target.querySelector("#poFilterVendor")?.value || "";
+  const matrixFY = target.querySelector("#poMatrixFY")?.value || CURRENT_FY;
   const userDivSet = getUserDivisionSet(state.user);
 
   let pos = filteredRowsByUser(state.data.purchaseOrders);
@@ -1573,6 +1574,47 @@ function renderPOTracker() {
     </tr>`;
   }).join("");
 
+  // Matrix by PO Description (monthly invoice totals)
+  const months = fiscalMonthsForYear(matrixFY);
+  const monthHeaders = months.map(m => `<th>${m.label.split(" ")[0]}</th>`).join("");
+  const descMap = new Map();
+  pos.forEach(po => {
+    const desc = String(po.description || `PO ${po.poNo}`).trim();
+    if (!descMap.has(desc)) {
+      descMap.set(desc, { desc, byMonth: Object.fromEntries(months.map(m => [m.key, 0])), total: 0 });
+    }
+    const bucket = descMap.get(desc);
+    const invs = state.data.invoices
+      .filter(i => String(i.poNo) === String(po.poNo))
+      .filter(i => getFiscalYearFromDate(i.dueDate || i.date) === matrixFY)
+      .filter(i => state.user?.type !== "supervisor" || invoiceBelongsToDivisions(i, userDivSet));
+    invs.forEach(i => {
+      const mk = getFiscalMonthLabel(i.dueDate || i.date, matrixFY);
+      if (!mk || bucket.byMonth[mk] === undefined) return;
+      const amt = Number(i.amount || 0);
+      bucket.byMonth[mk] += amt;
+      bucket.total += amt;
+    });
+  });
+  const matrixRows = [...descMap.values()]
+    .sort((a,b) => a.desc.localeCompare(b.desc))
+    .map(r => `<tr>
+      <td>${r.desc}</td>
+      ${months.map(m => `<td class="text-right">${fmt(r.byMonth[m.key] || 0)}</td>`).join("")}
+      <td class="text-right"><strong>${fmt(r.total)}</strong></td>
+    </tr>`).join("");
+  const matrixMonthTotals = Object.fromEntries(months.map(m => [m.key, 0]));
+  let matrixGrandTotal = 0;
+  [...descMap.values()].forEach(r => {
+    months.forEach(m => { matrixMonthTotals[m.key] += Number(r.byMonth[m.key] || 0); });
+    matrixGrandTotal += Number(r.total || 0);
+  });
+  const matrixTotalsRow = `<tr>
+    <td><strong>Grand Total</strong></td>
+    ${months.map(m => `<td class="text-right"><strong>${fmt(matrixMonthTotals[m.key] || 0)}</strong></td>`).join("")}
+    <td class="text-right"><strong>${fmt(matrixGrandTotal)}</strong></td>
+  </tr>`;
+
   target.innerHTML = `
     <div class="card">
       <h2>PO Tracker</h2>
@@ -1587,9 +1629,27 @@ function renderPOTracker() {
       </table></div>
       <p class="muted" style="margin-top:8px">${pos.length} POs shown</p>
     </div>`;
+    
+  target.innerHTML += `
+    <div class="card">
+      <h3>PO Description Matrix (Monthly Invoices)</h3>
+      <div class="filter-bar">
+        <label>Fiscal Year
+          <select id="poMatrixFY" onchange="renderPOTracker()">
+            ${FISCAL_YEARS.map(y => `<option${y===matrixFY?" selected":""}>${y}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>PO Description</th>${monthHeaders}<th>Total</th></tr></thead>
+        <tbody>${matrixRows ? `${matrixRows}${matrixTotalsRow}` : `<tr><td colspan="${months.length + 2}">No invoices found for selected fiscal year.</td></tr>`}</tbody>
+      </table></div>
+    </div>
+  `;
 
   if (filterDiv) target.querySelector("#poFilterDiv").value = filterDiv;
   if (filterVendor) target.querySelector("#poFilterVendor").value = filterVendor;
+  if (target.querySelector("#poMatrixFY")) target.querySelector("#poMatrixFY").value = matrixFY;
 }
 window.renderPOTracker = renderPOTracker;
 
