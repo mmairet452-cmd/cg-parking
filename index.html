@@ -852,10 +852,107 @@ function renderImports() {
         <button class="btn primary" id="runImportBtn">▶ Run All Imports</button>
         <span id="importStatus" class="muted"></span>
       </div>
+      <div class="card" style="margin-top:12px">
+        <h3>⬇ Download Import Templates</h3>
+        <p class="muted">Download and fill these templates, then upload in the matching import section above.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="tplBudgetBtn">Budget Template</button>
+          <button class="btn" id="tplPoBtn">PO Template</button>
+          <button class="btn" id="tplInvoiceBtn">Invoice Template</button>
+          <button class="btn" id="tplRevenueBtn">Revenue Template</button>
+        </div>
+      </div>
       <div id="importLog" style="margin-top:12px;font-size:0.82rem;color:var(--muted);white-space:pre-wrap;max-height:200px;overflow-y:auto;"></div>
     </div>
   `;
   document.getElementById("runImportBtn").onclick = handleImportAll;
+  document.getElementById("tplBudgetBtn").onclick = downloadBudgetTemplate;
+  document.getElementById("tplPoBtn").onclick = downloadPOTemplate;
+  document.getElementById("tplInvoiceBtn").onclick = downloadInvoiceTemplate;
+  document.getElementById("tplRevenueBtn").onclick = downloadRevenueTemplate;
+}
+
+function downloadBudgetTemplate() {
+  const rows = [
+    { "Division": "8101", "Account Description": "Repair/Maint - Buildings", "Account Number": "4600", "Budget": 12000, "Year": CURRENT_FY },
+    { "Division": "8200", "Account Description": "Telecom Services", "Account Number": "4100", "Budget": 160000, "Year": CURRENT_FY }
+  ];
+  exportRows(`Template_Budget_${today()}.xlsx`, rows);
+}
+
+function downloadPOTemplate() {
+  const rows = [
+    {
+      "Purchase Order #": "13320",
+      "PO Type": "SPO1",
+      "Monthly Invoice Tracker": "yes",
+      "Vendor Name": "Sample Vendor",
+      "Description": "Flowbird Services",
+      "Line #": "1",
+      "Division": "8101",
+      "Account #": "4600",
+      "Amount": 800
+    },
+    {
+      "Purchase Order #": "13320",
+      "PO Type": "SPO1",
+      "Monthly Invoice Tracker": "yes",
+      "Vendor Name": "Sample Vendor",
+      "Description": "Flowbird Services",
+      "Line #": "1",
+      "Division": "8103",
+      "Account #": "4600",
+      "Amount": 800
+    }
+  ];
+  exportRows(`Template_PO_${today()}.xlsx`, rows);
+}
+
+function downloadInvoiceTemplate() {
+  const rows = [
+    {
+      "Invoice #": "INV-1001",
+      "Invoice Mode": "po",
+      "Purchase Order #": "13320",
+      "PO Line Key": "8101|4600|0:0",
+      "Vendor #": "V123",
+      "Vendor Name": "Sample Vendor",
+      "Invoice Amount": 750,
+      "Date Entered": "2025-10-15",
+      "Due Date": "2025-10-31",
+      "Status": "Pending",
+      "Division": "8101",
+      "Invoice Category": "general",
+      "Approval Required": "yes",
+      "Approval To": "Stefan"
+    },
+    {
+      "Invoice #": "INV-1002",
+      "Invoice Mode": "basic",
+      "Purchase Order #": "",
+      "PO Line Key": "",
+      "Vendor #": "V200",
+      "Vendor Name": "Flowbird",
+      "Invoice Amount": 11520,
+      "Date Entered": "2025-10-20",
+      "Due Date": "2025-10-31",
+      "Status": "Paid",
+      "Division": "8200",
+      "Account #": "4600",
+      "Invoice Category": "pbp",
+      "Approval Required": "no",
+      "Approval To": ""
+    }
+  ];
+  exportRows(`Template_Invoices_${today()}.xlsx`, rows);
+}
+
+function downloadRevenueTemplate() {
+  const rows = [
+    { "year": "FY26", "type": "PBP", "month": "Oct", "amount": 11520 },
+    { "year": "FY26", "type": "ParkMobile", "month": "Oct", "amount": 1200 }
+  ];
+  exportRows(`Template_Revenue_${today()}.xlsx`, rows);
 }
 
 async function handleImportAll() {
@@ -886,10 +983,30 @@ async function importBudgetFile(file, year) {
   const rows = await fileToRows(file);
   let added = 0, updated = 0;
   rows.forEach(r => {
-    const division = String(r["Division"] || r["division"] || "").trim();
-    const account = String(r["Account #"] || r["Account"] || r["account"] || "").trim();
-    const description = String(r["Account Description"] || r["Description"] || r["description"] || "").trim();
-    const budget = Number(r["Budget"] || r["budget"] || r["Budget "] || 0);
+    const division = String(r["Division"] || r["division"] || r["Division #"] || "").trim();
+    const account = String(
+      r["Account #"] ||
+      r["Account"] ||
+      r["account"] ||
+      r["Account Number"] ||
+      r["Acct #"] ||
+      ""
+    ).trim();
+    const description = String(
+      r["Account Description"] ||
+      r["Description"] ||
+      r["description"] ||
+      r["Account Desc"] ||
+      ""
+    ).trim();
+    const budget = Number(
+      r["Budget"] ||
+      r["budget"] ||
+      r["Budget "] ||
+      r["Adopted Budget"] ||
+      r["Amount"] ||
+      0
+    );
     const fy = year || String(r["Year"] || r["FY"] || CURRENT_FY);
     if (!division || !account) return;
     const existing = state.data.budgets.find(b => b.division === division && b.account === account && b.year === fy);
