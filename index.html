@@ -1433,8 +1433,8 @@ function renderManage() {
       poLineSel.innerHTML = `<option value="">— Select PO first —</option>`;
       return;
     }
-    if (String(po.poType || "") === "SPO1") {
-      toast("SPO1 selected: ORDERS and INVOICES must be under $1,000", "error");
+    if (String(po.poType || "") === "SPO2") {
+      toast("SPO2 selected: ORDERS and INVOICES must be under $1,000", "error");
     }
     poLineSel.innerHTML = `<option value="">— Not specified —</option>` + (po.lines || []).flatMap((l, idx) => {
       return getLineAllocations(l).map((a, aIdx) => {
@@ -1672,8 +1672,8 @@ function renderPOTracker() {
       const al = getLineAllocations(l);
       return `L${l.lineNo || (idx + 1)}: ` + al.map(a => `${a.division}-${a.account} ${fmt(a.amount)}`).join(" | ");
     }).join("<br>");
-    const spoWarn = String(po.poType || "") === "SPO1"
-      ? `<span class="tag tag-red">SPO1: ORDERS and INVOICES must be under $1,000</span>`
+    const spoWarn = String(po.poType || "") === "SPO2"
+      ? `<span class="tag tag-red">SPO2: ORDERS and INVOICES must be under $1,000</span>`
       : "";
     return `<tr>
       <td>${po.poNo}</td>
