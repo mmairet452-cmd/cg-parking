@@ -1835,19 +1835,59 @@ window.renderBasicInvoices = renderBasicInvoices;
 function renderPOMonthlyInvoices() {
   const target = document.getElementById("poMonthlyInvoicePage");
   const selectedFY = target.querySelector("#poMonthFy")?.value || CURRENT_FY;
-  const trackedPoNos = new Set(
-    filteredRowsByUser(state.data.purchaseOrders)
-      .filter(p => !!p.monthlyInvoiceTracked)
-      .map(p => String(p.poNo))
+  const trackedPOs = filteredRowsByUser(state.data.purchaseOrders).filter(p => !!p.monthlyInvoiceTracked);
+  const trackedPoNos = new Set(trackedPOs.map(p => String(p.poNo)));
+  const invs = filteredRowsByUser(state.data.invoices).filter(i =>
+    i.poNo && trackedPoNos.has(String(i.poNo)) && getFiscalYearFromDate(i.dueDate || i.date) === selectedFY
   );
-  const invs = filteredRowsByUser(state.data.invoices)
-    .filter(i => i.poNo && trackedPoNos.has(String(i.poNo)))
-    .filter(i => getFiscalYearFromDate(i.dueDate || i.date) === selectedFY);
   const months = fiscalMonthsForYear(selectedFY);
-  const rows = months.map(m => {
+  const summaryRows = months.map(m => {
     const mRows = invs.filter(i => getFiscalMonthLabel(i.dueDate || i.date, selectedFY) === m.key);
     return `<tr><td>${m.label}</td><td>${mRows.length}</td><td class="text-right">${fmt(sum(mRows.map(i => Number(i.amount || 0))))}</td></tr>`;
   }).join("");
+
+  // Detail matrix by PO name (with account context)
+  const poLabelMap = new Map();
+  trackedPOs.forEach(po => {
+    const allocPreview = (po.lines || [])
+      .flatMap(l => getLineAllocations(l))
+      .slice(0, 3)
+      .map(a => `${a.division}-${a.account}`)
+      .join(", ");
+    const label = `${po.poNo} | ${po.description || "No Description"}${allocPreview ? ` | ${allocPreview}` : ""}`;
+    poLabelMap.set(String(po.poNo), label);
+  });
+  const rowMap = new Map();
+  invs.forEach(i => {
+    const poNo = String(i.poNo);
+    const label = poLabelMap.get(poNo) || poNo;
+    if (!rowMap.has(poNo)) {
+      rowMap.set(poNo, { label, byMonth: Object.fromEntries(months.map(m => [m.key, 0])), total: 0 });
+    }
+    const row = rowMap.get(poNo);
+    const mk = getFiscalMonthLabel(i.dueDate || i.date, selectedFY);
+    if (mk && row.byMonth[mk] !== undefined) {
+      row.byMonth[mk] += Number(i.amount || 0);
+      row.total += Number(i.amount || 0);
+    }
+  });
+  const detailRows = [...rowMap.values()].sort((a, b) => a.label.localeCompare(b.label)).map(r => `<tr>
+    <td>${r.label}</td>
+    ${months.map(m => `<td class="text-right">${fmt(r.byMonth[m.key] || 0)}</td>`).join("")}
+    <td class="text-right"><strong>${fmt(r.total)}</strong></td>
+  </tr>`).join("");
+  const totalsByMonth = Object.fromEntries(months.map(m => [m.key, 0]));
+  let grandTotal = 0;
+  [...rowMap.values()].forEach(r => {
+    months.forEach(m => { totalsByMonth[m.key] += Number(r.byMonth[m.key] || 0); });
+    grandTotal += Number(r.total || 0);
+  });
+  const detailTotalsRow = `<tr>
+    <td><strong>Grand Total</strong></td>
+    ${months.map(m => `<td class="text-right"><strong>${fmt(totalsByMonth[m.key] || 0)}</strong></td>`).join("")}
+    <td class="text-right"><strong>${fmt(grandTotal)}</strong></td>
+  </tr>`;
+
   target.innerHTML = `
     <div class="card">
       <h2>PO Monthly Invoice Tracker</h2>
@@ -1858,7 +1898,12 @@ function renderPOMonthlyInvoices() {
       </div>
       <div class="table-wrap"><table>
         <thead><tr><th>Month</th><th>Invoices</th><th>Total</th></tr></thead>
-        <tbody>${rows || "<tr><td colspan='3'>No monthly PO-tracked invoices.</td></tr>"}</tbody>
+        <tbody>${summaryRows || "<tr><td colspan='3'>No monthly PO-tracked invoices.</td></tr>"}</tbody>
+      </table></div>
+      <p class="muted" style="margin-top:10px;margin-bottom:6px">Matrix by PO number/name and account context</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>PO Name</th>${months.map(m => `<th>${m.label.split(" ")[0]}</th>`).join("")}<th>Total</th></tr></thead>
+        <tbody>${detailRows ? `${detailRows}${detailTotalsRow}` : `<tr><td colspan="${months.length + 2}">No PO-level monthly data for selected fiscal year.</td></tr>`}</tbody>
       </table></div>
     </div>
   `;
